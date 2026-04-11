@@ -736,6 +736,12 @@ export default function GameWorld({
   // -----------------------------------------------------------------
   const ROAD_TILE_WORLD_W = 808;
   const ROAD_TILE_WORLD_H = 65;
+  // The dark pothole pit in the Road with pothole.png image spans
+  // from pixel 394 to 636 (243px wide) within the 808px tile.
+  // When placing the pothole tile over a gap, we position the tile
+  // so tile_x + 394 = gap_left, meaning the dark pixels line up
+  // exactly with the physical gap in the ground platform.
+  const POTHOLE_LEFT_OFFSET = 394;
 
   // Detect ground-level platform spans and gaps between them.
   // Road tiles render ONLY over ground spans. Gaps are left empty
@@ -835,15 +841,15 @@ export default function GameWorld({
         />
       ))}
 
-      {/* Pothole images at each gap — the pothole graphic shows
-          the crumbling road edges so the player knows to jump. */}
+      {/* Pothole images at each gap — positioned so the dark pit
+          pixels in the image line up with the physical gap. */}
       {gaps.map((gap, i) => (
         <Image
           key={`pothole-${i}`}
           source={require('../assets/Road with pothole.png')}
           style={{
             position: 'absolute',
-            left: xToScreen(gap.cx - ROAD_TILE_WORLD_W / 2),
+            left: xToScreen(gap.left - POTHOLE_LEFT_OFFSET),
             top: roadTopScreen,
             width: roadWPx,
             height: roadHPx,

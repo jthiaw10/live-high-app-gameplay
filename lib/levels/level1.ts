@@ -58,15 +58,18 @@ export const level1: LevelData = {
   // Platforms — continuous ground with elevated platforms stacked on top.
   // ----------------------------------------------------------------------
   platforms: [
-    // ===== [0 .. 1200] OPENER ==========================================
-    { x: 0, y: GROUND_Y, width: 1200, height: 50 },
+    // ===== [0 .. 1179] OPENER ==========================================
+    // Ground ends at 1179 where pothole 1's dark region begins.
+    { x: 0, y: GROUND_Y, width: 1179, height: 50 },
     // Low teaching platform for the first jump (70 px rise).
     { x: 600, y: GROUND_Y - 80, width: 280, height: 26 },
 
-    // ===== [1200 .. 1400] GAP 1 (200 px death pit) =====================
+    // ===== [1179 .. 1421] POTHOLE 1 (243 px pit) =======================
+    // Aligned to the dark pixels in Road with pothole.png
+    // (tile placed at x=785, dark region at tile-relative 394–636).
 
-    // ===== [1400 .. 2600] CRAB + STAIRS ================================
-    { x: 1400, y: GROUND_Y, width: 1200, height: 50 },
+    // ===== [1421 .. 2600] CRAB + STAIRS ================================
+    { x: 1421, y: GROUND_Y, width: 1179, height: 50 },
     // Rising staircase. Step heights tuned so a jump from the top
     // step doesn't clip the top of the viewport (apex from y=300 is
     // y=−2, just inside the world height of 710).
@@ -88,19 +91,19 @@ export const level1: LevelData = {
     // 10-coin power threshold on the ground.
     { x: 3800, y: GROUND_Y, width: 800, height: 50 },
 
-    // ===== [4600 .. 5600] DRONE CORRIDOR ===============================
-    // Fully continuous ground. Drones overhead. This is where the
-    // power becomes fun — shoot the drones instead of dodging them.
-    { x: 4600, y: GROUND_Y, width: 1000, height: 50 },
+    // ===== [4600 .. 5579] DRONE CORRIDOR ================================
+    // Ground ends at 5579 where pothole 2's dark region begins.
+    { x: 4600, y: GROUND_Y, width: 979, height: 50 },
     // Low cover platforms you can run under OR jump on for height.
     { x: 4780, y: GROUND_Y - 90, width: 220, height: 26 },
     { x: 5120, y: GROUND_Y - 90, width: 220, height: 26 },
-    { x: 5400, y: GROUND_Y - 90, width: 200, height: 26 },
+    { x: 5400, y: GROUND_Y - 90, width: 180, height: 26 },
 
-    // ===== [5600 .. 5800] GAP 2 (200 px death pit) =====================
+    // ===== [5579 .. 5821] POTHOLE 2 (243 px pit) =======================
+    // Tile at x=5185, dark region at tile-relative 394–636.
 
-    // ===== [5800 .. 6800] TRANSITION ZONE ==============================
-    { x: 5800, y: GROUND_Y, width: 1000, height: 50 },
+    // ===== [5821 .. 6800] TRANSITION ZONE ==============================
+    { x: 5821, y: GROUND_Y, width: 979, height: 50 },
     { x: 6100, y: GROUND_Y - 120, width: 280, height: 26 },
     { x: 6450, y: GROUND_Y - 120, width: 280, height: 26 },
 

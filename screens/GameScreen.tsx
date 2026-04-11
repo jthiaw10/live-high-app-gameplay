@@ -39,6 +39,7 @@ import {
   COMBO,
   BOSS_CONFIG,
   STOMP,
+  DRONE_LASER,
 } from '../config/constants';
 import {
   Player,
@@ -53,6 +54,7 @@ import {
   LevelData,
   Particle,
   Projectile,
+  EnemyProjectile,
   Checkpoint,
   SpeedBoost,
   Boss,
@@ -110,6 +112,7 @@ interface GameState {
   progression: ProgressionState;
   particles: Particle[];
   projectiles: Projectile[];
+  enemyProjectiles: EnemyProjectile[];
   cameraX: number;
   cameraShake: number;
   levelWidth: number;
@@ -260,6 +263,7 @@ function buildInitialState(level: LevelData): GameState {
     },
     particles: [],
     projectiles: [],
+    enemyProjectiles: [],
     cameraX: 0,
     cameraShake: 0,
     levelWidth: level.widthPx,
@@ -779,6 +783,64 @@ export default function GameScreen({
         );
 
         // --------------------------------------------------------------
+        // Drone lasers — drones fire at the player when locked on.
+        // Spawn new laser projectiles and update existing ones.
+        // --------------------------------------------------------------
+        const spawnedEnemyProjectiles: EnemyProjectile[] = [];
+        for (let i = 0; i < newEnemies.length; i++) {
+          const e = newEnemies[i];
+          if (e.isDefeated || e.type !== 'drone' || !e.isLockedOn) continue;
+          // Fire when cooldown is 0 (or undefined = first shot).
+          if ((e.shootCooldown ?? 0) <= 0) {
+            // Aim at player's center from drone's center.
+            const dx = (newPlayer.position.x + newPlayer.width / 2) - (e.x + e.width / 2);
+            const dy = (newPlayer.position.y + newPlayer.height / 2) - (e.y + e.height / 2);
+            const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+            const vx = (dx / dist) * DRONE_LASER.SPEED;
+            const vy = (dy / dist) * DRONE_LASER.SPEED;
+            spawnedEnemyProjectiles.push({
+              id: `laser-${Date.now()}-${i}`,
+              x: e.x + e.width / 2 - DRONE_LASER.WIDTH / 2,
+              y: e.y + e.height / 2 - DRONE_LASER.HEIGHT / 2,
+              vx, vy,
+              width: DRONE_LASER.WIDTH,
+              height: DRONE_LASER.HEIGHT,
+              life: DRONE_LASER.LIFE_MS,
+              maxLife: DRONE_LASER.LIFE_MS,
+            });
+            newEnemies[i] = { ...e, shootCooldown: DRONE_LASER.COOLDOWN_MS };
+            audio.play('menuClick');
+          }
+        }
+
+        // Update existing enemy projectiles.
+        const enemyProjPool = [...prevState.enemyProjectiles, ...spawnedEnemyProjectiles];
+        const livingEnemyProj: EnemyProjectile[] = [];
+        for (const ep of enemyProjPool) {
+          const nx = ep.x + ep.vx * dt;
+          const ny = ep.y + ep.vy * dt;
+          const nl = ep.life - deltaTimeMs;
+          if (nl <= 0) continue;
+          // Check if laser hits the player.
+          const hitPlayer =
+            nx + ep.width > newPlayer.position.x + 6 &&
+            nx < newPlayer.position.x + newPlayer.width - 6 &&
+            ny + ep.height > newPlayer.position.y + 6 &&
+            ny < newPlayer.position.y + newPlayer.height - 6;
+          if (hitPlayer && !newPlayer.isInvincible) {
+            shouldDie = true;
+            frameParticles.push(
+              ...makeSparkParticles(
+                newPlayer.position.x + newPlayer.width / 2,
+                newPlayer.position.y + newPlayer.height / 2
+              )
+            );
+            continue; // consume the laser
+          }
+          livingEnemyProj.push({ ...ep, x: nx, y: ny, life: nl });
+        }
+
+        // --------------------------------------------------------------
         // Projectiles — motion + TTL + enemy collision.
         // Projectiles pass through platforms and hazards, only hit
         // enemies. Mutates newEnemies by flipping isDefeated.
@@ -1088,6 +1150,7 @@ export default function GameScreen({
           projectiles: livingProjectiles,
           collectibles: newCollectibles,
           enemies: newEnemies,
+          enemyProjectiles: livingEnemyProj,
           checkpoints: newCheckpoints,
           speedBoosts: newSpeedBoosts,
           boss: newBoss,
@@ -1198,6 +1261,7 @@ export default function GameScreen({
           checkpoints={gameState.checkpoints}
           speedBoosts={gameState.speedBoosts}
           boss={gameState.boss}
+          enemyProjectiles={gameState.enemyProjectiles}
         />
 
         <View

@@ -158,6 +158,8 @@ export function updateEnemy(enemy: Enemy, playerX: number, deltaTime: number): E
     case 'lockon': {
       const droneDistance = Math.abs(playerX - enemy.x);
       const speed = enemy.speed ?? 70;
+
+      // Horizontal tracking.
       if (droneDistance < 250) {
         updatedEnemy.isLockedOn = true;
         if (droneDistance < 200) {
@@ -169,6 +171,26 @@ export function updateEnemy(enemy: Enemy, playerX: number, deltaTime: number): E
         updatedEnemy.isLockedOn = false;
         updatedEnemy.velocityX = 0;
       }
+
+      // Vertical patrol — bob up and down within patrolTopY..patrolBottomY.
+      if (updatedEnemy.patrolTopY !== undefined && updatedEnemy.patrolBottomY !== undefined) {
+        const vSpeed = (speed ?? 70) * 0.4;
+        const dirY = updatedEnemy.directionY ?? 1;
+        updatedEnemy.y += vSpeed * dirY * dt;
+        if (updatedEnemy.y <= updatedEnemy.patrolTopY) {
+          updatedEnemy.y = updatedEnemy.patrolTopY;
+          updatedEnemy.directionY = 1;
+        } else if (updatedEnemy.y + enemy.height >= updatedEnemy.patrolBottomY) {
+          updatedEnemy.y = updatedEnemy.patrolBottomY - enemy.height;
+          updatedEnemy.directionY = -1;
+        }
+      }
+
+      // Tick shoot cooldown (actual projectile spawning is in GameScreen).
+      if (updatedEnemy.shootCooldown !== undefined && updatedEnemy.shootCooldown > 0) {
+        updatedEnemy.shootCooldown = Math.max(0, updatedEnemy.shootCooldown - deltaTime);
+      }
+
       break;
     }
   }

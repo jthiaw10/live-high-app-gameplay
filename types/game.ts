@@ -173,6 +173,22 @@ export interface GameState {
 export type EnemyType = 'crab' | 'seagull' | 'policeman' | 'drone';
 export type EnemyBehavior = 'patrol' | 'hover' | 'chase' | 'lockon';
 
+/**
+ * Enemy-fired projectile (drone laser). Travels toward the player's
+ * last known position. Player contact = damage/death.
+ */
+export interface EnemyProjectile {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  width: number;
+  height: number;
+  life: number;
+  maxLife: number;
+}
+
 export interface Enemy {
   id: string;
   type: EnemyType;
@@ -210,6 +226,13 @@ export interface Enemy {
    */
   idleSprite?: any;
   movingSprite?: any;
+  /** Vertical patrol bounds for drones (world-y range). */
+  patrolTopY?: number;
+  patrolBottomY?: number;
+  /** Vertical direction: -1 = up, 1 = down. */
+  directionY?: number;
+  /** Remaining ms until the drone can fire again. */
+  shootCooldown?: number;
 }
 
 /**

@@ -296,6 +296,10 @@ export const level1: LevelData = {
       detectionRange: 320,
       speed: 80,
       isLockedOn: false,
+      patrolTopY: GROUND_Y - 320,
+      patrolBottomY: GROUND_Y - 100,
+      directionY: 1,
+      shootCooldown: 1200,
     },
     {
       id: 'drone-2',
@@ -308,6 +312,10 @@ export const level1: LevelData = {
       detectionRange: 320,
       speed: 80,
       isLockedOn: false,
+      patrolTopY: GROUND_Y - 340,
+      patrolBottomY: GROUND_Y - 120,
+      directionY: -1,
+      shootCooldown: 800,
     },
     {
       id: 'drone-3',
@@ -320,6 +328,10 @@ export const level1: LevelData = {
       detectionRange: 320,
       speed: 80,
       isLockedOn: false,
+      patrolTopY: GROUND_Y - 300,
+      patrolBottomY: GROUND_Y - 80,
+      directionY: 1,
+      shootCooldown: 1600,
     },
 
     // Transition zone patrol
@@ -360,6 +372,10 @@ export const level1: LevelData = {
       detectionRange: 320,
       speed: 85,
       isLockedOn: false,
+      patrolTopY: GROUND_Y - 320,
+      patrolBottomY: GROUND_Y - 100,
+      directionY: -1,
+      shootCooldown: 1400,
     },
 
     // --- GAUNTLET enemies ---
@@ -398,6 +414,10 @@ export const level1: LevelData = {
       detectionRange: 320,
       speed: 90,
       isLockedOn: false,
+      patrolTopY: GROUND_Y - 330,
+      patrolBottomY: GROUND_Y - 90,
+      directionY: 1,
+      shootCooldown: 1000,
     },
     {
       id: 'crab-5',

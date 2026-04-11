@@ -176,6 +176,17 @@ export const BOSS_CONFIG = {
 } as const;
 
 /**
+ * Drone laser.
+ */
+export const DRONE_LASER = {
+  SPEED: 400,         // px/s
+  WIDTH: 20,
+  HEIGHT: 8,
+  LIFE_MS: 2000,      // travels ~800px before fizzling
+  COOLDOWN_MS: 2400,  // time between shots per drone
+} as const;
+
+/**
  * Stomp mechanic.
  */
 export const STOMP = {

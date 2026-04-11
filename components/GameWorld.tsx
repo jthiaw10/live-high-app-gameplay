@@ -27,6 +27,7 @@ import {
   Goal,
   Particle,
   Projectile,
+  EnemyProjectile,
   Checkpoint,
   SpeedBoost,
   Boss,
@@ -62,6 +63,7 @@ interface GameWorldProps {
   checkpoints: Checkpoint[];
   speedBoosts: SpeedBoost[];
   boss: Boss | null;
+  enemyProjectiles: EnemyProjectile[];
 }
 
 export default function GameWorld({
@@ -84,6 +86,7 @@ export default function GameWorld({
   checkpoints,
   speedBoosts,
   boss,
+  enemyProjectiles,
 }: GameWorldProps) {
   // World→screen helpers. Everything positioned in this component uses
   // world coordinates as input; these helpers multiply by the render
@@ -700,6 +703,46 @@ export default function GameWorld({
     );
   };
 
+  const renderEnemyProjectile = (ep: EnemyProjectile) => {
+    const alpha = Math.max(0.4, ep.life / ep.maxLife);
+    // Compute rotation from velocity direction.
+    const angle = Math.atan2(ep.vy, ep.vx) * (180 / Math.PI);
+    return (
+      <View
+        key={ep.id}
+        style={{
+          position: 'absolute',
+          left: xToScreen(ep.x),
+          top: yToScreen(ep.y),
+          width: px(ep.width),
+          height: px(ep.height),
+          transform: [{ rotate: `${angle}deg` }],
+          opacity: alpha,
+        }}
+        pointerEvents="none"
+      >
+        {/* Red laser core */}
+        <View style={{
+          position: 'absolute', left: 0, top: 0,
+          width: px(ep.width), height: px(ep.height),
+          backgroundColor: BRAND.reggaeRed,
+          borderRadius: px(ep.height),
+          borderWidth: 1,
+          borderColor: '#ff8888',
+        }} />
+        {/* Bright center */}
+        <View style={{
+          position: 'absolute',
+          left: px(3), top: px(1),
+          width: px(ep.width - 6),
+          height: px(ep.height - 2),
+          backgroundColor: '#ff4444',
+          borderRadius: px(ep.height),
+        }} />
+      </View>
+    );
+  };
+
   const renderParticle = (p: Particle) => {
     const alpha = Math.max(0, p.life / p.maxLife);
     const size = p.size * (p.type === 'spark' ? alpha : 1);
@@ -881,6 +924,9 @@ export default function GameWorld({
 
       {/* Fire-shot projectiles */}
       {projectiles.map(renderProjectile)}
+
+      {/* Enemy laser projectiles */}
+      {enemyProjectiles.map(renderEnemyProjectile)}
 
       {/* Particle effects on top of everything */}
       {particles.map(renderParticle)}

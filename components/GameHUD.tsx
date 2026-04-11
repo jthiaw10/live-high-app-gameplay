@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Image, Text, StyleSheet } from 'react-native';
-import { ProgressionState, ExpFeedback } from '../types/game';
-import { BRAND, POWER_UNLOCK_COINS } from '../config/constants';
+import { ProgressionState, ExpFeedback, ComboState } from '../types/game';
+import { BRAND, POWER_UNLOCK_COINS, COMBO } from '../config/constants';
 
 interface GameHUDProps {
   coins: number;
@@ -11,6 +11,7 @@ interface GameHUDProps {
   expFeedbacks: ExpFeedback[];
   cameraX: number;
   renderScale: number;
+  combo: ComboState;
 }
 
 export default function GameHUD({
@@ -21,6 +22,7 @@ export default function GameHUD({
   expFeedbacks,
   cameraX,
   renderScale,
+  combo,
 }: GameHUDProps) {
   const powerUnlocked = coins >= POWER_UNLOCK_COINS;
   const coinsUntilPower = Math.max(0, POWER_UNLOCK_COINS - coins);
@@ -84,6 +86,21 @@ export default function GameHUD({
           </Text>
         )}
       </View>
+
+      {/* Combo counter — shown top-center when multiplier > 1 */}
+      {combo.multiplier > 1 && (
+        <View style={styles.comboBadge}>
+          <Text style={styles.comboText}>x{combo.multiplier} COMBO</Text>
+          <View style={styles.comboBarBg}>
+            <View
+              style={[
+                styles.comboBarFill,
+                { width: `${Math.max(0, (combo.timer / COMBO.WINDOW_MS) * 100)}%` as any },
+              ]}
+            />
+          </View>
+        </View>
+      )}
 
       {/* Floating pickup feedback — positioned in WORLD coords, scaled
           to screen pixels by renderScale. Coins show just "+10" text.
@@ -174,6 +191,37 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#ffff00',
+  },
+  comboBadge: {
+    position: 'absolute',
+    top: 20,
+    alignSelf: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: BRAND.gold,
+  },
+  comboText: {
+    color: BRAND.gold,
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 3,
+  },
+  comboBarBg: {
+    width: 100,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  comboBarFill: {
+    height: 4,
+    backgroundColor: BRAND.gold,
+    borderRadius: 2,
   },
   coinFeedbackText: {
     fontSize: 22,

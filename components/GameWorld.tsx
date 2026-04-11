@@ -27,6 +27,9 @@ import {
   Goal,
   Particle,
   Projectile,
+  Checkpoint,
+  SpeedBoost,
+  Boss,
 } from '../types/game';
 import {
   BRAND,
@@ -56,6 +59,9 @@ interface GameWorldProps {
   screenHeight: number;
   /** Level width in world coords (for bg parallax sizing). */
   levelWidth: number;
+  checkpoints: Checkpoint[];
+  speedBoosts: SpeedBoost[];
+  boss: Boss | null;
 }
 
 export default function GameWorld({
@@ -75,6 +81,9 @@ export default function GameWorld({
   screenWidth,
   screenHeight,
   levelWidth,
+  checkpoints,
+  speedBoosts,
+  boss,
 }: GameWorldProps) {
   // World→screen helpers. Everything positioned in this component uses
   // world coordinates as input; these helpers multiply by the render
@@ -544,6 +553,153 @@ export default function GameWorld({
     );
   };
 
+  const renderCheckpoint = (cp: Checkpoint) => {
+    const flagColor = cp.activated ? BRAND.reggaeGreen : BRAND.gold;
+    const t = Date.now() / 1000;
+    const wave = cp.activated ? Math.sin(t * 4) * 3 : 0;
+    return (
+      <View
+        key={cp.id}
+        style={{
+          position: 'absolute',
+          left: xToScreen(cp.x),
+          top: yToScreen(cp.y),
+        }}
+        pointerEvents="none"
+      >
+        {/* Pole */}
+        <View style={{
+          position: 'absolute', left: px(16), top: 0,
+          width: px(4), height: px(cp.height),
+          backgroundColor: '#888', borderRadius: px(2),
+        }} />
+        {/* Flag */}
+        <View style={{
+          position: 'absolute', left: px(20), top: px(4 + wave),
+          width: px(30), height: px(22),
+          backgroundColor: flagColor, borderRadius: px(3),
+          opacity: cp.activated ? 1 : 0.7,
+        }} />
+        {cp.activated && (
+          <View style={{
+            position: 'absolute', left: px(8), bottom: px(-10),
+            width: px(24), height: px(8),
+            backgroundColor: BRAND.reggaeGreen, opacity: 0.4,
+            borderRadius: px(12),
+          }} />
+        )}
+      </View>
+    );
+  };
+
+  const renderSpeedBoost = (sb: SpeedBoost) => {
+    if (sb.collected) return null;
+    const t = Date.now() / 1000;
+    const bob = Math.sin(t * 4 + sb.x * 0.01) * 5;
+    const glow = 0.5 + Math.sin(t * 6) * 0.2;
+    return (
+      <View
+        key={sb.id}
+        style={{
+          position: 'absolute',
+          left: xToScreen(sb.x),
+          top: yToScreen(sb.y + bob),
+          width: px(sb.width),
+          height: px(sb.height),
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        pointerEvents="none"
+      >
+        <View style={{
+          position: 'absolute',
+          width: px(sb.width * 1.5), height: px(sb.height * 1.5),
+          borderRadius: px(sb.width),
+          backgroundColor: BRAND.neonTeal, opacity: glow * 0.3,
+        }} />
+        <View style={{
+          width: px(sb.width * 0.7), height: px(sb.height * 0.7),
+          backgroundColor: BRAND.neonTeal, borderRadius: px(sb.width),
+          borderWidth: 2, borderColor: BRAND.offWhite,
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Text style={{ color: '#fff', fontSize: Math.max(10, px(14)), fontWeight: '900' }}>
+            {'>>'}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderBoss = (b: Boss) => {
+    if (b.phase === 'defeated') return null;
+    const isVulnerable = b.phase === 'vulnerable';
+    const isCharging = b.phase === 'charge';
+    const t = Date.now() / 1000;
+    const shake = isCharging ? Math.sin(t * 30) * 3 : 0;
+    const pulse = isVulnerable ? 0.5 + Math.sin(t * 8) * 0.3 : 0;
+
+    return (
+      <View
+        key={b.id}
+        style={{
+          position: 'absolute',
+          left: xToScreen(b.x + shake),
+          top: yToScreen(b.y),
+        }}
+        pointerEvents="none"
+      >
+        {/* Boss body — large dark slab with colored border */}
+        <View style={{
+          width: px(b.width), height: px(b.height),
+          backgroundColor: isVulnerable ? '#5a2040' : '#2a1535',
+          borderWidth: 3,
+          borderColor: isVulnerable ? BRAND.reggaeRed : BRAND.sunsetOrange,
+          borderRadius: px(16),
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          {/* "Face" — two glowing eyes */}
+          <View style={{ flexDirection: 'row', gap: px(20), marginBottom: px(10) }}>
+            <View style={{
+              width: px(14), height: px(14), borderRadius: px(7),
+              backgroundColor: isVulnerable ? BRAND.reggaeRed : BRAND.gold,
+            }} />
+            <View style={{
+              width: px(14), height: px(14), borderRadius: px(7),
+              backgroundColor: isVulnerable ? BRAND.reggaeRed : BRAND.gold,
+            }} />
+          </View>
+          {/* "Mouth" */}
+          <View style={{
+            width: px(40), height: px(8), borderRadius: px(4),
+            backgroundColor: isCharging ? BRAND.reggaeRed : '#444',
+          }} />
+        </View>
+        {/* Vulnerable glow */}
+        {isVulnerable && (
+          <View style={{
+            position: 'absolute', left: px(-10), top: px(-10),
+            width: px(b.width + 20), height: px(b.height + 20),
+            borderRadius: px(20), borderWidth: 3,
+            borderColor: BRAND.reggaeRed, opacity: pulse,
+          }} />
+        )}
+        {/* Health bar above boss */}
+        <View style={{
+          position: 'absolute', top: px(-20),
+          left: px(10), right: px(10), height: px(8),
+          backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: px(4),
+        }}>
+          <View style={{
+            width: `${(b.health / b.maxHealth) * 100}%` as any,
+            height: px(8), borderRadius: px(4),
+            backgroundColor: b.health > 2 ? BRAND.reggaeGreen : BRAND.reggaeRed,
+          }} />
+        </View>
+      </View>
+    );
+  };
+
   const renderParticle = (p: Particle) => {
     const alpha = Math.max(0, p.life / p.maxLife);
     const size = p.size * (p.type === 'spark' ? alpha : 1);
@@ -672,8 +828,17 @@ export default function GameWorld({
       {/* End-of-level goal */}
       {renderGoal()}
 
+      {/* Checkpoints */}
+      {checkpoints.map(renderCheckpoint)}
+
+      {/* Speed boosts */}
+      {speedBoosts.map(renderSpeedBoost)}
+
       {/* Collectible Coins */}
       {collectibles.map(renderCollectible)}
+
+      {/* Boss */}
+      {boss && renderBoss(boss)}
 
       {/* Enemies */}
       {enemies.map(renderEnemy)}

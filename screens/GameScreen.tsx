@@ -1195,6 +1195,9 @@ export default function GameScreen({
           screenWidth={SCREEN_WIDTH}
           screenHeight={SCREEN_HEIGHT}
           levelWidth={gameState.levelWidth}
+          checkpoints={gameState.checkpoints}
+          speedBoosts={gameState.speedBoosts}
+          boss={gameState.boss}
         />
 
         <View
@@ -1228,6 +1231,7 @@ export default function GameScreen({
         expFeedbacks={gameState.progression.expFeedback}
         cameraX={gameState.cameraX}
         renderScale={renderScale}
+        combo={gameState.combo}
       />
 
       {/* Level label + lives, top-right */}

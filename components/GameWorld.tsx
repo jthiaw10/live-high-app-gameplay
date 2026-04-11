@@ -721,14 +721,14 @@ export default function GameWorld({
         }}
         pointerEvents="none"
       >
-        {/* Red laser core */}
+        {/* Turquoise laser core */}
         <View style={{
           position: 'absolute', left: 0, top: 0,
           width: px(ep.width), height: px(ep.height),
-          backgroundColor: BRAND.reggaeRed,
+          backgroundColor: '#0099cc',
           borderRadius: px(ep.height),
           borderWidth: 1,
-          borderColor: '#ff8888',
+          borderColor: '#66eeff',
         }} />
         {/* Bright center */}
         <View style={{
@@ -736,7 +736,7 @@ export default function GameWorld({
           left: px(3), top: px(1),
           width: px(ep.width - 6),
           height: px(ep.height - 2),
-          backgroundColor: '#ff4444',
+          backgroundColor: '#33ddff',
           borderRadius: px(ep.height),
         }} />
       </View>

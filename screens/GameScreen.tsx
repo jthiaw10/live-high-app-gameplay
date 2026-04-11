@@ -21,6 +21,9 @@ import {
   updateEnemy,
   checkEnemyCollision,
   checkHazardCollision,
+  updateMovingPlatform,
+  updateBreakablePlatform,
+  updateBoss,
   PHYSICS,
 } from '../lib/physics';
 import { getLevel } from '../lib/levels';
@@ -31,6 +34,11 @@ import {
   POWER_UNLOCK_COINS,
   PROJECTILE,
   WORLD_HEIGHT,
+  BREAKABLE,
+  SPEED_BOOST,
+  COMBO,
+  BOSS_CONFIG,
+  STOMP,
 } from '../config/constants';
 import {
   Player,
@@ -45,6 +53,10 @@ import {
   LevelData,
   Particle,
   Projectile,
+  Checkpoint,
+  SpeedBoost,
+  Boss,
+  ComboState,
 } from '../types/game';
 import PlayerSprite from '../components/PlayerSprite';
 import GameWorld from '../components/GameWorld';
@@ -91,6 +103,10 @@ interface GameState {
   enemies: Enemy[];
   hazards: Hazard[];
   goal: Goal;
+  checkpoints: Checkpoint[];
+  speedBoosts: SpeedBoost[];
+  boss: Boss | null;
+  combo: ComboState;
   progression: ProgressionState;
   particles: Particle[];
   projectiles: Projectile[];
@@ -101,6 +117,8 @@ interface GameState {
   isDying: boolean;
   deathTimer: number;
   isLevelComplete: boolean;
+  /** World-x of the last activated checkpoint (null = use level spawn). */
+  lastCheckpointX: number | null;
 }
 
 // Monotonic counter for projectile ids.
@@ -217,10 +235,10 @@ function buildInitialState(level: LevelData): GameState {
       jumpsRemaining: PLAYER_MAX_JUMPS,
       shootCooldownMs: 0,
       shootAnimMs: 0,
+      speedBoostMs: 0,
     },
-    platforms: level.platforms,
+    platforms: level.platforms.map((p) => ({ ...p, broken: false, breakTimer: undefined })),
     props: level.props,
-    // Deep copy mutable fields so replays start clean.
     collectibles: level.collectibles.map((c) => ({ ...c, collected: false })),
     worldProps: level.worldProps,
     enemies: level.enemies.map((e) => ({
@@ -230,6 +248,10 @@ function buildInitialState(level: LevelData): GameState {
     })),
     hazards: level.hazards,
     goal: level.goal,
+    checkpoints: level.checkpoints.map((c) => ({ ...c, activated: false })),
+    speedBoosts: (level.speedBoosts || []).map((s) => ({ ...s, collected: false })),
+    boss: level.boss ? { ...level.boss, phase: 'idle' as const, phaseTimer: BOSS_CONFIG.IDLE_MS } : null,
+    combo: { multiplier: 1, timer: 0, streak: 0 },
     progression: {
       coins: 0,
       exp: 0,
@@ -245,6 +267,7 @@ function buildInitialState(level: LevelData): GameState {
     isDying: false,
     deathTimer: 0,
     isLevelComplete: false,
+    lastCheckpointX: null,
   };
 }
 
@@ -415,17 +438,23 @@ export default function GameScreen({
             // persists across levels.
             setTimeout(() => onLifeLost(remaining), 0);
 
-            // Respawn at level start, reset level entities, keep score.
-            cameraXRef.current = 0;
+            // Respawn at last checkpoint (or level start).
+            const respawnX = prevState.lastCheckpointX ?? getLevel(levelIndex).spawn.x;
+            const respawnY = GAME_CONFIG.GROUND_Y - PLAYER_HEIGHT;
+            cameraXRef.current = Math.max(0, respawnX - 300);
             coyoteMs.current = 0;
             jumpBufferMs.current = 0;
             prevGroundedRef.current = true;
             const fresh = buildInitialState(getLevel(levelIndex));
+            fresh.player.position.x = respawnX;
+            fresh.player.position.y = respawnY;
             return {
               ...fresh,
-              // Preserve running coin/exp count so the player doesn't feel
-              // punished for a death in the middle of a collection run.
+              // Preserve checkpoint, progression, and combo state.
+              lastCheckpointX: prevState.lastCheckpointX,
+              checkpoints: prevState.checkpoints,
               progression: prevState.progression,
+              combo: prevState.combo,
             };
           }
 
@@ -451,13 +480,20 @@ export default function GameScreen({
           if (newPlayer.invincibilityTimer === 0) newPlayer.isInvincible = false;
         }
 
+        // Speed boost — tick timer from PREVIOUS frame. The pickup
+        // collision happens later but the timer drives this frame's speed.
+        newPlayer.speedBoostMs = Math.max(0, newPlayer.speedBoostMs - deltaTimeMs);
+        const effectiveMoveSpeed = newPlayer.speedBoostMs > 0
+          ? PHYSICS.MOVE_SPEED * SPEED_BOOST.MULTIPLIER
+          : PHYSICS.MOVE_SPEED;
+
         // Target velocity from input. Zero means "decelerate to rest".
         let targetVx = 0;
         if (inputState.current.left) {
-          targetVx = -PHYSICS.MOVE_SPEED;
+          targetVx = -effectiveMoveSpeed;
           newPlayer.isFacingRight = false;
         } else if (inputState.current.right) {
-          targetVx = PHYSICS.MOVE_SPEED;
+          targetVx = effectiveMoveSpeed;
           newPlayer.isFacingRight = true;
         }
 
@@ -574,7 +610,14 @@ export default function GameScreen({
           newPlayer.velocity.x = 0;
         }
 
-        const collision = checkPlatformCollision(newPlayer, prevState.platforms);
+        // --- Tick moving & breakable platforms before collision ---
+        const newPlatforms = prevState.platforms.map((p) => {
+          if (p.moveType === 'moving') return updateMovingPlatform(p, deltaTimeMs);
+          if (p.moveType === 'breakable') return updateBreakablePlatform(p, deltaTimeMs);
+          return p;
+        }).filter((p) => !p.broken);
+
+        const collision = checkPlatformCollision(newPlayer, newPlatforms);
         const wasAirborne = !prevGroundedRef.current;
         const landingVy = newPlayer.velocity.y;
         if (collision.collided && collision.platform) {
@@ -617,6 +660,116 @@ export default function GameScreen({
         // Progression state — moved here (above projectile collision)
         // so enemy kills can award EXP.
         const newProgression = { ...prevState.progression };
+        let shouldDie = false;
+
+        // --------------------------------------------------------------
+        // Combo state — tick down the window timer. If it hits 0, reset.
+        // advanceCombo() is called by stomp, projectile kill, and coin.
+        // --------------------------------------------------------------
+        const newCombo: ComboState = { ...prevState.combo };
+        if (newCombo.timer > 0) {
+          newCombo.timer = Math.max(0, newCombo.timer - deltaTimeMs);
+          if (newCombo.timer === 0) {
+            newCombo.multiplier = 1;
+            newCombo.streak = 0;
+          }
+        }
+        const advanceCombo = () => {
+          newCombo.streak += 1;
+          newCombo.timer = COMBO.WINDOW_MS;
+          const thresholds = COMBO.THRESHOLDS;
+          if (newCombo.streak >= thresholds[2]) newCombo.multiplier = 4;
+          else if (newCombo.streak >= thresholds[1]) newCombo.multiplier = 3;
+          else if (newCombo.streak >= thresholds[0]) newCombo.multiplier = 2;
+          else newCombo.multiplier = 1;
+          if (newCombo.multiplier > COMBO.MAX_MULT) newCombo.multiplier = COMBO.MAX_MULT;
+        };
+
+        // Start break timer when player lands on a breakable platform.
+        if (newPlayer.isGrounded) {
+          for (let i = 0; i < newPlatforms.length; i++) {
+            const p = newPlatforms[i];
+            if (p.moveType === 'breakable' && !p.broken && p.breakTimer === undefined) {
+              const onIt =
+                newPlayer.position.x + newPlayer.width > p.x &&
+                newPlayer.position.x < p.x + p.width &&
+                Math.abs(newPlayer.position.y + newPlayer.height - p.y) < 8;
+              if (onIt) {
+                newPlatforms[i] = { ...p, breakTimer: BREAKABLE.WARN_MS + BREAKABLE.CRUMBLE_MS };
+              }
+            }
+          }
+        }
+
+        // --------------------------------------------------------------
+        // Speed boost pickup
+        // --------------------------------------------------------------
+        const newSpeedBoosts = prevState.speedBoosts.map((sb) => {
+          if (sb.collected) return sb;
+          const hit =
+            newPlayer.position.x + newPlayer.width > sb.x &&
+            newPlayer.position.x < sb.x + sb.width &&
+            newPlayer.position.y + newPlayer.height > sb.y &&
+            newPlayer.position.y < sb.y + sb.height;
+          if (hit) {
+            newPlayer.speedBoostMs = SPEED_BOOST.DURATION_MS;
+            audio.play('coin');
+            frameParticles.push(
+              ...makeSparkParticles(sb.x + sb.width / 2, sb.y + sb.height / 2)
+            );
+            return { ...sb, collected: true };
+          }
+          return sb;
+        });
+
+        // Clamp velocity to effective speed (in case boost just expired).
+        if (Math.abs(newPlayer.velocity.x) > effectiveMoveSpeed) {
+          newPlayer.velocity.x = Math.sign(newPlayer.velocity.x) * effectiveMoveSpeed;
+        }
+
+        // --------------------------------------------------------------
+        // Checkpoint collision
+        // --------------------------------------------------------------
+        let newLastCheckpointX = prevState.lastCheckpointX;
+        const newCheckpoints = prevState.checkpoints.map((cp) => {
+          if (cp.activated) return cp;
+          const hit =
+            newPlayer.position.x + newPlayer.width > cp.x &&
+            newPlayer.position.x < cp.x + cp.width &&
+            newPlayer.position.y + newPlayer.height > cp.y &&
+            newPlayer.position.y < cp.y + cp.height;
+          if (hit) {
+            newLastCheckpointX = cp.x;
+            audio.play('coin');
+            return { ...cp, activated: true };
+          }
+          return cp;
+        });
+
+        // --------------------------------------------------------------
+        // Boss update (AI phase tick + player collision)
+        // Boss-projectile collision is handled after the projectile
+        // block below so livingProjectiles is available.
+        // --------------------------------------------------------------
+        let newBoss = prevState.boss;
+        if (newBoss && newBoss.phase !== 'defeated') {
+          newBoss = updateBoss(newBoss, newPlayer.position.x, deltaTimeMs);
+
+          if (newBoss.phase === 'charge') {
+            const bossHit =
+              newPlayer.position.x + newPlayer.width > newBoss.x + 10 &&
+              newPlayer.position.x < newBoss.x + newBoss.width - 10 &&
+              newPlayer.position.y + newPlayer.height > newBoss.y + 10 &&
+              newPlayer.position.y < newBoss.y + newBoss.height - 10;
+            if (bossHit) {
+              newPlayer.velocity.x = newPlayer.position.x < newBoss.x
+                ? -BOSS_CONFIG.KNOCKBACK_VX
+                : BOSS_CONFIG.KNOCKBACK_VX;
+              newPlayer.velocity.y = -300;
+              shouldDie = true;
+            }
+          }
+        }
 
         // --------------------------------------------------------------
         // Enemies
@@ -658,14 +811,15 @@ export default function GameScreen({
               newEnemies[i] = { ...e, isDefeated: true, health: 0 };
               consumed = true;
               audio.play('hit');
-              // Award EXP for the kill.
-              newProgression.exp += COIN_EXP_VALUE;
+              // Award EXP for the kill (with combo multiplier).
+              advanceCombo();
+              newProgression.exp += COIN_EXP_VALUE * newCombo.multiplier;
               newProgression.expFeedback.push({
                 id: `exp-${Date.now()}-${Math.random()}`,
                 x: e.x + e.width / 2,
                 y: e.y,
                 startTime: Date.now(),
-                amount: COIN_EXP_VALUE,
+                amount: COIN_EXP_VALUE * newCombo.multiplier,
                 kind: 'exp',
               });
               // Kill burst sparks.
@@ -702,11 +856,66 @@ export default function GameScreen({
           });
         }
 
-        let shouldDie = false;
-        for (const enemy of newEnemies) {
+        // Boss-projectile collision (only during vulnerable phase).
+        if (newBoss && newBoss.phase === 'vulnerable') {
+          for (let pi = 0; pi < livingProjectiles.length; pi++) {
+            const p = livingProjectiles[pi];
+            const hit =
+              p.x + p.width > newBoss.x &&
+              p.x < newBoss.x + newBoss.width &&
+              p.y + p.height > newBoss.y &&
+              p.y < newBoss.y + newBoss.height;
+            if (hit) {
+              newBoss = { ...newBoss, health: newBoss.health - 1 };
+              livingProjectiles.splice(pi, 1);
+              pi--;
+              audio.play('hit');
+              frameParticles.push(
+                ...makeSparkParticles(newBoss.x + newBoss.width / 2, newBoss.y + newBoss.height / 2)
+              );
+              if (newBoss.health <= 0) {
+                newBoss = { ...newBoss, phase: 'defeated' };
+                audio.play('levelComplete');
+                newProgression.exp += 50;
+                newProgression.expFeedback.push({
+                  id: `boss-kill-${Date.now()}`,
+                  x: newBoss.x + newBoss.width / 2,
+                  y: newBoss.y,
+                  startTime: Date.now(),
+                  amount: 50,
+                  kind: 'exp',
+                });
+              }
+              break;
+            }
+          }
+        }
+
+        for (let i = 0; i < newEnemies.length; i++) {
+          const enemy = newEnemies[i];
           if (enemy.isDefeated || enemy.health <= 0) continue;
           const col = checkEnemyCollision(newPlayer, enemy);
-          if (col.type === 'damage') {
+          if (col.type === 'stomp') {
+            // Mario-style stomp — defeat the enemy, bounce the player.
+            newEnemies[i] = { ...enemy, isDefeated: true, health: 0 };
+            newPlayer.velocity.y = STOMP.BOUNCE_VY;
+            newPlayer.jumpsRemaining = PLAYER_MAX_JUMPS;
+            audio.play('hit');
+            // Combo + EXP
+            newProgression.exp += COIN_EXP_VALUE * newCombo.multiplier;
+            newProgression.expFeedback.push({
+              id: `exp-stomp-${Date.now()}`,
+              x: enemy.x + enemy.width / 2,
+              y: enemy.y,
+              startTime: Date.now(),
+              amount: COIN_EXP_VALUE * newCombo.multiplier,
+              kind: 'exp',
+            });
+            advanceCombo();
+            frameParticles.push(
+              ...makeSparkParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2)
+            );
+          } else if (col.type === 'damage') {
             shouldDie = true;
             break;
           }
@@ -774,7 +983,10 @@ export default function GameScreen({
           }
           return coin;
         });
-        if (pickedCoin) audio.play('coin');
+        if (pickedCoin) {
+          audio.play('coin');
+          advanceCombo();
+        }
 
         // --- Power-up ceremony trigger ---
         // When the player crosses the coin threshold, freeze the game
@@ -869,12 +1081,18 @@ export default function GameScreen({
         return {
           ...prevState,
           player: newPlayer,
+          platforms: newPlatforms,
           cameraX,
           cameraShake: nextShake,
           particles: updatedParticles,
           projectiles: livingProjectiles,
           collectibles: newCollectibles,
           enemies: newEnemies,
+          checkpoints: newCheckpoints,
+          speedBoosts: newSpeedBoosts,
+          boss: newBoss,
+          combo: newCombo,
+          lastCheckpointX: newLastCheckpointX,
           progression: newProgression,
         };
       });

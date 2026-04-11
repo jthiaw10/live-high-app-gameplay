@@ -37,7 +37,7 @@ import { LevelData } from '../../types/game';
 import { GAME_CONFIG, ENTITY_SIZE } from '../../config/constants';
 
 const GROUND_Y = GAME_CONFIG.GROUND_Y;
-const LEVEL_WIDTH = 6800;
+const LEVEL_WIDTH = 11000;
 
 const { crab, seagull, drone, policeman, fire, coin, goal } = ENTITY_SIZE;
 
@@ -99,11 +99,46 @@ export const level1: LevelData = {
 
     // ===== [5600 .. 5800] GAP 2 (200 px death pit) =====================
 
-    // ===== [5800 .. 6800] VICTORY RUN ==================================
+    // ===== [5800 .. 6800] TRANSITION ZONE ==============================
     { x: 5800, y: GROUND_Y, width: 1000, height: 50 },
-    // Final elevated stretch leading into the goal.
     { x: 6100, y: GROUND_Y - 120, width: 280, height: 26 },
     { x: 6450, y: GROUND_Y - 120, width: 280, height: 26 },
+
+    // ===== [6800 .. 8200] ROOFTOP CLIMB ================================
+    // Vertical platforming section with moving and breakable platforms.
+    { x: 6800, y: GROUND_Y, width: 600, height: 50 },
+    // Moving platforms — slide left/right on a rail.
+    { x: 7100, y: GROUND_Y - 120, width: 200, height: 26,
+      moveType: 'moving' as const, moveStart: 7000, moveEnd: 7500, moveSpeed: 80 },
+    { x: 7350, y: GROUND_Y - 220, width: 200, height: 26,
+      moveType: 'moving' as const, moveStart: 7200, moveEnd: 7700, moveSpeed: 90 },
+    // Breakable block — crumbles after landing
+    { x: 7600, y: GROUND_Y - 140, width: 180, height: 26,
+      moveType: 'breakable' as const },
+    { x: 7400, y: GROUND_Y, width: 800, height: 50 },
+    // More moving platforms for height
+    { x: 7850, y: GROUND_Y - 180, width: 200, height: 26,
+      moveType: 'moving' as const, moveStart: 7750, moveEnd: 8250, moveSpeed: 70 },
+    { x: 8200, y: GROUND_Y, width: 600, height: 50 },
+
+    // ===== [8200 .. 9400] GAUNTLET =====================================
+    // Dense enemy section with mixed obstacles.
+    { x: 8200, y: GROUND_Y, width: 1200, height: 50 },
+    { x: 8500, y: GROUND_Y - 100, width: 260, height: 26 },
+    { x: 8800, y: GROUND_Y - 160, width: 260, height: 26 },
+    // Breakable block over a gap
+    { x: 9050, y: GROUND_Y - 100, width: 160, height: 26,
+      moveType: 'breakable' as const },
+    { x: 9200, y: GROUND_Y - 150, width: 220, height: 26,
+      moveType: 'moving' as const, moveStart: 9100, moveEnd: 9500, moveSpeed: 100 },
+
+    // ===== [9400 .. 10000] FINAL APPROACH ==============================
+    { x: 9400, y: GROUND_Y, width: 600, height: 50 },
+    { x: 9700, y: GROUND_Y - 130, width: 200, height: 26 },
+    { x: 9900, y: GROUND_Y - 130, width: 200, height: 26 },
+
+    // ===== [10000 .. 11000] BOSS ARENA =================================
+    { x: 10000, y: GROUND_Y, width: 1000, height: 50 },
   ],
 
   // Props and world props cleared for now — the animated road ground
@@ -158,11 +193,29 @@ export const level1: LevelData = {
     // Gap 2 arc coin (coin 20)
     { id: 'c20', x: 5700, y: GROUND_Y - 170, width: coin.w, height: coin.h, collected: false, type: 'coin' },
 
-    // Victory run (coins 21-24)
+    // Transition zone (coins 21-24)
     { id: 'c21', x: 5900, y: GROUND_Y - 80, width: coin.w, height: coin.h, collected: false, type: 'coin' },
     { id: 'c22', x: 6180, y: GROUND_Y - 170, width: coin.w, height: coin.h, collected: false, type: 'coin' },
     { id: 'c23', x: 6530, y: GROUND_Y - 170, width: coin.w, height: coin.h, collected: false, type: 'coin' },
     { id: 'c24', x: 6720, y: GROUND_Y - 80, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+
+    // Rooftop climb (coins 25-28)
+    { id: 'c25', x: 6900, y: GROUND_Y - 80, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c26', x: 7200, y: GROUND_Y - 180, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c27', x: 7500, y: GROUND_Y - 280, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c28', x: 7900, y: GROUND_Y - 240, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+
+    // Gauntlet (coins 29-33)
+    { id: 'c29', x: 8350, y: GROUND_Y - 80, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c30', x: 8600, y: GROUND_Y - 150, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c31', x: 8900, y: GROUND_Y - 210, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c32', x: 9150, y: GROUND_Y - 150, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c33', x: 9350, y: GROUND_Y - 80, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+
+    // Final approach (coins 34-36)
+    { id: 'c34', x: 9550, y: GROUND_Y - 80, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c35', x: 9750, y: GROUND_Y - 180, width: coin.w, height: coin.h, collected: false, type: 'coin' },
+    { id: 'c36', x: 9950, y: GROUND_Y - 180, width: coin.w, height: coin.h, collected: false, type: 'coin' },
   ],
 
   // ----------------------------------------------------------------------
@@ -266,7 +319,7 @@ export const level1: LevelData = {
       isLockedOn: false,
     },
 
-    // Victory run final patrol
+    // Transition zone patrol
     {
       id: 'police-3',
       type: 'policeman',
@@ -280,6 +333,95 @@ export const level1: LevelData = {
       idleSprite: require('../../assets/Copy of POLICEMAN 2.png'),
       movingSprite: require('../../assets/Copy of POLICEMAN.png'),
     },
+
+    // --- ROOFTOP CLIMB enemies ---
+    {
+      id: 'crab-3',
+      type: 'crab',
+      x: 7000, y: on(GROUND_Y, crab.h),
+      width: crab.w, height: crab.h,
+      velocityX: 65, velocityY: 0,
+      health: 1,
+      behavior: 'patrol',
+      patrolStart: 6850, patrolEnd: 7350,
+      speed: 65, direction: 1,
+    },
+    {
+      id: 'drone-4',
+      type: 'drone',
+      x: 7600, y: GROUND_Y - 260,
+      width: drone.w, height: drone.h,
+      velocityX: 0, velocityY: 0,
+      health: 1,
+      behavior: 'lockon',
+      detectionRange: 320,
+      speed: 85,
+      isLockedOn: false,
+    },
+
+    // --- GAUNTLET enemies ---
+    {
+      id: 'crab-4',
+      type: 'crab',
+      x: 8400, y: on(GROUND_Y, crab.h),
+      width: crab.w, height: crab.h,
+      velocityX: 70, velocityY: 0,
+      health: 1,
+      behavior: 'patrol',
+      patrolStart: 8250, patrolEnd: 8600,
+      speed: 70, direction: -1,
+    },
+    {
+      id: 'police-4',
+      type: 'policeman',
+      x: 8800, y: on(GROUND_Y, policeman.h),
+      width: policeman.w, height: policeman.h,
+      velocityX: 65, velocityY: 0,
+      health: 1,
+      behavior: 'patrol',
+      patrolStart: 8650, patrolEnd: 9050,
+      speed: 65, direction: 1,
+      idleSprite: require('../../assets/Copy of POLICEMAN 2.png'),
+      movingSprite: require('../../assets/Copy of POLICEMAN.png'),
+    },
+    {
+      id: 'drone-5',
+      type: 'drone',
+      x: 9100, y: GROUND_Y - 250,
+      width: drone.w, height: drone.h,
+      velocityX: 0, velocityY: 0,
+      health: 1,
+      behavior: 'lockon',
+      detectionRange: 320,
+      speed: 90,
+      isLockedOn: false,
+    },
+    {
+      id: 'crab-5',
+      type: 'crab',
+      x: 9300, y: on(GROUND_Y, crab.h),
+      width: crab.w, height: crab.h,
+      velocityX: 75, velocityY: 0,
+      health: 1,
+      behavior: 'patrol',
+      patrolStart: 9200, patrolEnd: 9550,
+      speed: 75, direction: 1,
+    },
+
+    // --- FINAL APPROACH ---
+    {
+      id: 'police-5',
+      type: 'policeman',
+      x: 9600, y: on(GROUND_Y, policeman.h),
+      width: policeman.w, height: policeman.h,
+      velocityX: 70, velocityY: 0,
+      health: 1,
+      behavior: 'patrol',
+      patrolStart: 9450, patrolEnd: 9850,
+      speed: 70, direction: -1,
+      idleSprite: require('../../assets/Copy of POLICEMAN 2.png'),
+      movingSprite: require('../../assets/Copy of POLICEMAN.png'),
+    },
   ],
 
   // ----------------------------------------------------------------------
@@ -287,15 +429,54 @@ export const level1: LevelData = {
   // through the hazard garden lets you skip most of them entirely if
   // you climbed the staircase earlier.
   // ----------------------------------------------------------------------
-  // Fire hazards removed for now.
   hazards: [],
 
   // ----------------------------------------------------------------------
-  // Uplink portal — at the far end of the victory run.
+  // Checkpoints — mid-level respawn flags. Touching one saves that
+  // position so dying doesn't restart from x=0.
+  // ----------------------------------------------------------------------
+  checkpoints: [
+    { id: 'cp-1', x: 2500, y: GROUND_Y - 120, width: 40, height: 120, activated: false },
+    { id: 'cp-2', x: 4500, y: GROUND_Y - 120, width: 40, height: 120, activated: false },
+    { id: 'cp-3', x: 7200, y: GROUND_Y - 120, width: 40, height: 120, activated: false },
+    { id: 'cp-4', x: 9400, y: GROUND_Y - 120, width: 40, height: 120, activated: false },
+  ],
+
+  // ----------------------------------------------------------------------
+  // Speed boosts — temporary 1.55x speed pickups before long stretches.
+  // ----------------------------------------------------------------------
+  speedBoosts: [
+    { id: 'sb-1', x: 3850, y: GROUND_Y - 60, width: 44, height: 44, collected: false },
+    { id: 'sb-2', x: 7800, y: GROUND_Y - 60, width: 44, height: 44, collected: false },
+  ],
+
+  // ----------------------------------------------------------------------
+  // Boss — guards the UPLINK portal at the end.
+  // Charges at the player, then goes vulnerable for fire-shots.
+  // Takes 5 hits to defeat.
+  // ----------------------------------------------------------------------
+  boss: {
+    id: 'boss-1',
+    x: 10400,
+    y: GROUND_Y - 140,
+    width: 120,
+    height: 140,
+    health: 5,
+    maxHealth: 5,
+    phase: 'idle',
+    phaseTimer: 1200,
+    direction: -1,
+    speed: 420,
+    arenaLeft: 10000,
+    arenaRight: 10800,
+  },
+
+  // ----------------------------------------------------------------------
+  // Uplink portal — past the boss arena.
   // ----------------------------------------------------------------------
   goal: {
     id: 'l1-goal',
-    x: 6680,
+    x: 10900,
     y: GROUND_Y - goal.h,
     width: goal.w,
     height: goal.h,

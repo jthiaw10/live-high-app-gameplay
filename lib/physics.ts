@@ -1,4 +1,4 @@
-import { Player, Platform, Collectible, Enemy } from '../types/game';
+import { Player, Platform, Collectible, Enemy, Boss } from '../types/game';
 
 // Physics constants in world pixels per second (px/s) and px/s².
 //
@@ -176,17 +176,21 @@ export function updateEnemy(enemy: Enemy, playerX: number, deltaTime: number): E
   return updatedEnemy;
 }
 
+/**
+ * Returns 'stomp' if the player is landing on the enemy from above,
+ * 'damage' if it's a side/bottom hit, or null if no overlap.
+ *
+ * Stomp condition: player is falling (vy > 0) AND the player's bottom
+ * is in the top fraction of the enemy's height (TOP_FRACTION from
+ * config). This matches the classic Mario feel.
+ */
 export function checkEnemyCollision(
   player: Player,
   enemy: Enemy
-): { type: 'damage' | null } {
+): { type: 'stomp' | 'damage' | null } {
   if (enemy.isDefeated) return { type: null };
 
-  // Collision tolerance (inset on each side). Smaller now than before
-  // because the sprites themselves got tighter hitboxes after the
-  // cropping pass — we don't need as much forgiveness padding because
-  // the box no longer contains invisible dead space.
-  const COLLISION_TOLERANCE = 6; // px inset on each side
+  const COLLISION_TOLERANCE = 6;
 
   const playerLeft = player.position.x + COLLISION_TOLERANCE;
   const playerRight = player.position.x + player.width - COLLISION_TOLERANCE;
@@ -206,7 +210,13 @@ export function checkEnemyCollision(
 
   if (!isOverlapping) return { type: null };
 
-  // For this game mode we treat ANY overlap as damage.
+  // Stomp check: player is descending AND their feet are near the
+  // enemy's head (within the top 35% of the enemy).
+  const stompZone = enemyTop + (enemyBottom - enemyTop) * 0.35;
+  if (player.velocity.y > 0 && playerBottom <= stompZone) {
+    return { type: 'stomp' };
+  }
+
   return { type: 'damage' };
 }
 
@@ -230,4 +240,73 @@ export function checkHazardCollision(
     playerBottom > hazardTop &&
     playerTop < hazardBottom
   );
+}
+
+/** Tick a moving platform back and forth within its rail. */
+export function updateMovingPlatform(p: Platform, dtMs: number): Platform {
+  if (p.moveType !== 'moving' || p.moveStart === undefined || p.moveEnd === undefined) {
+    return p;
+  }
+  const dt = dtMs / 1000;
+  const speed = p.moveSpeed ?? 60;
+  const dir = (p as any)._dir ?? 1;
+  let newX = p.x + speed * dir * dt;
+  let newDir = dir;
+  if (newX <= p.moveStart) {
+    newX = p.moveStart;
+    newDir = 1;
+  } else if (newX + p.width >= p.moveEnd) {
+    newX = p.moveEnd - p.width;
+    newDir = -1;
+  }
+  return { ...p, x: newX, _dir: newDir } as any;
+}
+
+/** Tick breakable platform timer. Returns updated platform. */
+export function updateBreakablePlatform(p: Platform, dtMs: number): Platform {
+  if (p.moveType !== 'breakable' || p.broken) return p;
+  if (p.breakTimer === undefined || p.breakTimer <= 0) return p;
+  const remaining = p.breakTimer - dtMs;
+  if (remaining <= 0) {
+    return { ...p, broken: true, breakTimer: 0 };
+  }
+  return { ...p, breakTimer: remaining };
+}
+
+/** Simple boss AI state machine. */
+export function updateBoss(boss: Boss, playerX: number, dtMs: number): Boss {
+  if (boss.phase === 'defeated') return boss;
+  const dt = dtMs / 1000;
+  let b = { ...boss, phaseTimer: boss.phaseTimer - dtMs };
+
+  switch (boss.phase) {
+    case 'idle':
+      // Face the player.
+      b.direction = playerX > b.x + b.width / 2 ? 1 : -1;
+      if (b.phaseTimer <= 0) {
+        b.phase = 'charge';
+        b.phaseTimer = 1800;
+      }
+      break;
+    case 'charge':
+      // Rush toward the player's last known position.
+      b.x += b.speed * b.direction * dt;
+      // Clamp to arena.
+      if (b.x < b.arenaLeft) { b.x = b.arenaLeft; b.direction = 1; }
+      if (b.x + b.width > b.arenaRight) { b.x = b.arenaRight - b.width; b.direction = -1; }
+      if (b.phaseTimer <= 0) {
+        b.phase = 'vulnerable';
+        b.phaseTimer = 1600;
+      }
+      break;
+    case 'vulnerable':
+      // Stunned, can be hit by projectiles.
+      if (b.phaseTimer <= 0) {
+        b.phase = 'idle';
+        b.phaseTimer = 1200;
+      }
+      break;
+  }
+
+  return b;
 }

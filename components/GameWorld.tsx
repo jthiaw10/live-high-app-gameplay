@@ -737,30 +737,64 @@ export default function GameWorld({
   const ROAD_TILE_WORLD_W = 808;
   const ROAD_TILE_WORLD_H = 65;
 
-  // Detect gaps between ground-level platforms for pothole placement.
+  // Detect ground-level platform spans and gaps between them.
+  // Road tiles render ONLY over ground spans. Gaps are left empty
+  // except for a pothole overlay, so the player can see exactly
+  // where they'll fall.
   const groundPlats = platforms
     .filter((p) => p.y >= GAME_CONFIG.GROUND_Y - 2)
     .sort((a, b) => a.x - b.x);
 
-  const gaps: { cx: number }[] = [];
-  for (let i = 0; i < groundPlats.length - 1; i++) {
-    const rightEdge = groundPlats[i].x + groundPlats[i].width;
-    const leftEdge = groundPlats[i + 1].x;
-    if (leftEdge - rightEdge > 20) {
-      gaps.push({ cx: (rightEdge + leftEdge) / 2 });
+  // Merge overlapping ground spans into a single list.
+  const groundSpans: { left: number; right: number }[] = [];
+  for (const p of groundPlats) {
+    const right = p.x + p.width;
+    if (groundSpans.length > 0 && p.x <= groundSpans[groundSpans.length - 1].right) {
+      groundSpans[groundSpans.length - 1].right = Math.max(
+        groundSpans[groundSpans.length - 1].right,
+        right
+      );
+    } else {
+      groundSpans.push({ left: p.x, right });
     }
   }
 
-  // Road tiles — normal road covering the full level width.
-  const visWorldLeft = cameraX - ROAD_TILE_WORLD_W;
-  const visWorldRight = cameraX + screenWidth / S + ROAD_TILE_WORLD_W;
-  const firstRoadTile = Math.floor(visWorldLeft / ROAD_TILE_WORLD_W);
-  const lastRoadTile = Math.ceil(visWorldRight / ROAD_TILE_WORLD_W);
+  // Gaps = spaces between consecutive merged ground spans.
+  const gaps: { left: number; right: number; cx: number }[] = [];
+  for (let i = 0; i < groundSpans.length - 1; i++) {
+    const gapLeft = groundSpans[i].right;
+    const gapRight = groundSpans[i + 1].left;
+    if (gapRight - gapLeft > 20) {
+      gaps.push({ left: gapLeft, right: gapRight, cx: (gapLeft + gapRight) / 2 });
+    }
+  }
 
-  // Road bottom edge pinned to the bottom of the screen.
+  // Road rendering constants.
   const roadHPx = px(ROAD_TILE_WORLD_H);
   const roadWPx = px(ROAD_TILE_WORLD_W);
   const roadTopScreen = screenHeight - roadHPx;
+  const visWorldLeft = cameraX - ROAD_TILE_WORLD_W;
+  const visWorldRight = cameraX + screenWidth / S + ROAD_TILE_WORLD_W;
+
+  // Build road tiles that ONLY cover ground spans (not gaps).
+  // For each ground span, tile Road.png across it.
+  const roadTiles: { worldX: number; worldW: number }[] = [];
+  for (const span of groundSpans) {
+    // Skip spans entirely outside visible range.
+    if (span.right < visWorldLeft || span.left > visWorldRight) continue;
+    // Tile across this span.
+    const firstTile = Math.floor(span.left / ROAD_TILE_WORLD_W);
+    const lastTile = Math.ceil(span.right / ROAD_TILE_WORLD_W);
+    for (let ti = firstTile; ti <= lastTile; ti++) {
+      const tileLeft = ti * ROAD_TILE_WORLD_W;
+      const tileRight = tileLeft + ROAD_TILE_WORLD_W;
+      // Skip if tile is entirely outside this ground span.
+      if (tileRight <= span.left || tileLeft >= span.right) continue;
+      // Skip if outside visible range.
+      if (tileRight < visWorldLeft || tileLeft > visWorldRight) continue;
+      roadTiles.push({ worldX: tileLeft, worldW: ROAD_TILE_WORLD_W });
+    }
+  }
 
   return (
     <View style={styles.world}>
@@ -784,29 +818,25 @@ export default function GameWorld({
         );
       })}
 
-      {/* Road tile strip — normal Road.png across the whole level */}
-      {(() => {
-        const tiles = [];
-        for (let i = firstRoadTile; i <= lastRoadTile; i++) {
-          tiles.push(
-            <Image
-              key={`road-${i}`}
-              source={require('../assets/Road.png')}
-              style={{
-                position: 'absolute',
-                left: xToScreen(i * ROAD_TILE_WORLD_W),
-                top: roadTopScreen,
-                width: roadWPx,
-                height: roadHPx,
-              }}
-              resizeMode="stretch"
-            />
-          );
-        }
-        return tiles;
-      })()}
+      {/* Road tiles — only rendered over ground platform spans.
+          Gaps between ground platforms show as empty (no road). */}
+      {roadTiles.map((tile, i) => (
+        <Image
+          key={`road-${i}`}
+          source={require('../assets/Road.png')}
+          style={{
+            position: 'absolute',
+            left: xToScreen(tile.worldX),
+            top: roadTopScreen,
+            width: roadWPx,
+            height: roadHPx,
+          }}
+          resizeMode="stretch"
+        />
+      ))}
 
-      {/* Pothole overlays — Road with pothole.png centered on each gap */}
+      {/* Pothole images at each gap — the pothole graphic shows
+          the crumbling road edges so the player knows to jump. */}
       {gaps.map((gap, i) => (
         <Image
           key={`pothole-${i}`}

@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BRAND } from '../config/constants';
 import { audio } from '../lib/audio';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -19,6 +20,9 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
   const [sfxStep, setSfxStep] = useState(Math.round(initial.sfxVolume * STEPS));
   const [musicStep, setMusicStep] = useState(Math.round(initial.musicVolume * STEPS));
   const [enabled, setEnabled] = useState(initial.masterEnabled);
+  const { insets, font, uiScale, modalWidth } = useResponsive();
+
+  const barSize = Math.round(18 * uiScale);
 
   const applySfx = (step: number) => {
     setSfxStep(step);
@@ -43,7 +47,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
     color: string
   ) => (
     <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { fontSize: font(13) }]}>{label}</Text>
       <View style={styles.barRow}>
         {Array.from({ length: STEPS + 1 }).map((_, i) => (
           <TouchableOpacity
@@ -52,6 +56,8 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
             style={[
               styles.bar,
               {
+                width: barSize,
+                height: barSize,
                 backgroundColor: i <= step ? color : 'rgba(255,255,255,0.15)',
                 borderColor: color,
               },
@@ -59,24 +65,56 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
           />
         ))}
       </View>
-      <Text style={[styles.value, { color }]}>{Math.round((step / STEPS) * 100)}%</Text>
+      <Text style={[styles.value, { color, fontSize: font(12) }]}>
+        {Math.round((step / STEPS) * 100)}%
+      </Text>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.eyebrow}>SYSTEM</Text>
-      <Text style={styles.title}>SETTINGS</Text>
-      <View style={styles.divider} />
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: Math.max(20, insets.top + 16),
+          paddingBottom: Math.max(20, insets.bottom + 16),
+          paddingHorizontal: Math.max(20, insets.left + 20, insets.right + 20),
+        },
+      ]}
+    >
+      <Text style={[styles.eyebrow, { fontSize: font(13) }]}>SYSTEM</Text>
+      <Text style={[styles.title, { fontSize: font(40) }]}>SETTINGS</Text>
+      <View style={[styles.divider, { marginVertical: Math.round(18 * uiScale) }]} />
 
-      <View style={styles.card}>
+      <View
+        style={[
+          styles.card,
+          {
+            width: modalWidth,
+            padding: Math.round(18 * uiScale),
+            gap: Math.round(14 * uiScale),
+          },
+        ]}
+      >
         <TouchableOpacity
-          style={[styles.toggleRow, { borderColor: enabled ? BRAND.reggaeGreen : BRAND.reggaeRed }]}
+          style={[
+            styles.toggleRow,
+            {
+              paddingVertical: Math.round(9 * uiScale),
+              paddingHorizontal: Math.round(12 * uiScale),
+              borderColor: enabled ? BRAND.reggaeGreen : BRAND.reggaeRed,
+            },
+          ]}
           onPress={toggleEnabled}
           activeOpacity={0.8}
         >
-          <Text style={styles.label}>AUDIO</Text>
-          <Text style={[styles.toggleValue, { color: enabled ? BRAND.reggaeGreen : BRAND.reggaeRed }]}>
+          <Text style={[styles.label, { fontSize: font(13) }]}>AUDIO</Text>
+          <Text
+            style={[
+              styles.toggleValue,
+              { fontSize: font(16), color: enabled ? BRAND.reggaeGreen : BRAND.reggaeRed },
+            ]}
+          >
             {enabled ? 'ON' : 'OFF'}
           </Text>
         </TouchableOpacity>
@@ -86,14 +124,21 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
       </View>
 
       <TouchableOpacity
-        style={styles.backBtn}
+        style={[
+          styles.backBtn,
+          {
+            marginTop: Math.round(22 * uiScale),
+            paddingHorizontal: Math.round(36 * uiScale),
+            paddingVertical: Math.round(12 * uiScale),
+          },
+        ]}
         onPress={() => {
           audio.play('menuClick');
           onBack();
         }}
         activeOpacity={0.85}
       >
-        <Text style={styles.backText}>BACK</Text>
+        <Text style={[styles.backText, { fontSize: font(15) }]}>BACK</Text>
       </TouchableOpacity>
     </View>
   );
@@ -105,17 +150,14 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.nightPurple,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
   },
   eyebrow: {
     color: BRAND.neonTeal,
-    fontSize: 13,
     letterSpacing: 5,
     fontWeight: 'bold',
   },
   title: {
     color: BRAND.gold,
-    fontSize: 42,
     fontWeight: '900',
     letterSpacing: 4,
     marginTop: 6,
@@ -127,17 +169,13 @@ const styles = StyleSheet.create({
     height: 2,
     width: 100,
     backgroundColor: BRAND.sunsetOrange,
-    marginVertical: 22,
     borderRadius: 2,
   },
   card: {
-    width: 340,
-    padding: 20,
     borderRadius: 14,
     backgroundColor: BRAND.deepPurple,
     borderWidth: 2,
     borderColor: BRAND.neonTeal,
-    gap: 16,
   },
   row: {
     flexDirection: 'row',
@@ -146,7 +184,6 @@ const styles = StyleSheet.create({
   },
   label: {
     color: BRAND.offWhite,
-    fontSize: 13,
     fontWeight: 'bold',
     letterSpacing: 2,
     width: 60,
@@ -159,42 +196,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bar: {
-    width: 20,
-    height: 20,
     borderRadius: 3,
     borderWidth: 1,
   },
   value: {
-    width: 44,
+    width: 48,
     textAlign: 'right',
-    fontSize: 12,
     fontWeight: 'bold',
   },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 2,
   },
   toggleValue: {
-    fontSize: 16,
     fontWeight: '900',
     letterSpacing: 3,
   },
   backBtn: {
-    marginTop: 30,
-    paddingHorizontal: 40,
-    paddingVertical: 14,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: BRAND.gold,
   },
   backText: {
     color: BRAND.gold,
-    fontSize: 15,
     fontWeight: 'bold',
     letterSpacing: 4,
   },

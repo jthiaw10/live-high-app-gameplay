@@ -66,6 +66,7 @@ import GameControls from '../components/GameControls';
 import GameHUD from '../components/GameHUD';
 import PauseOverlay from './PauseOverlay';
 import LevelCompleteOverlay from './LevelCompleteOverlay';
+import { useResponsive } from '../hooks/useResponsive';
 
 const {
   PLAYER_WIDTH,
@@ -285,6 +286,7 @@ export default function GameScreen({
   onQuitToMenu,
 }: GameScreenProps) {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
+  const responsive = useResponsive();
   const level = getLevel(levelIndex);
 
   // Uniform render scale — world is authored in a 600-tall reference
@@ -1299,18 +1301,38 @@ export default function GameScreen({
       />
 
       {/* Level label + lives, top-right */}
-      <View style={styles.topRight} pointerEvents="box-none">
-        <Text style={styles.levelLabel}>{level.name.toUpperCase()}</Text>
-        <Text style={styles.livesLabel}>LIVES {lives}  SCORE {runningScore}</Text>
+      <View
+        style={[
+          styles.topRight,
+          {
+            top: Math.max(12, responsive.insets.top + 8),
+            right: Math.max(16, responsive.insets.right + 12),
+          },
+        ]}
+        pointerEvents="box-none"
+      >
+        <Text style={[styles.levelLabel, { fontSize: responsive.font(16) }]}>
+          {level.name.toUpperCase()}
+        </Text>
+        <Text style={[styles.livesLabel, { fontSize: responsive.font(12) }]}>
+          LIVES {lives}  SCORE {runningScore}
+        </Text>
         <TouchableOpacity
-          style={styles.pauseBtn}
+          style={[
+            styles.pauseBtn,
+            {
+              width: Math.round(44 * responsive.uiScale),
+              height: Math.round(44 * responsive.uiScale),
+              borderRadius: Math.round(22 * responsive.uiScale),
+            },
+          ]}
           onPress={() => {
             audio.play('menuClick');
             setIsPaused(true);
           }}
           activeOpacity={0.7}
         >
-          <Text style={styles.pauseBtnText}>II</Text>
+          <Text style={[styles.pauseBtnText, { fontSize: responsive.font(16) }]}>II</Text>
         </TouchableOpacity>
       </View>
 
@@ -1328,8 +1350,8 @@ export default function GameScreen({
       {gameState.isDying && (
         <View style={styles.deathOverlay} pointerEvents="none">
           <View style={styles.deathContent}>
-            <Text style={styles.skullText}>DOWNED</Text>
-            <Text style={styles.skullSub}>
+            <Text style={[styles.skullText, { fontSize: responsive.font(60) }]}>DOWNED</Text>
+            <Text style={[styles.skullSub, { fontSize: responsive.font(16) }]}>
               {lives - 1 > 0 ? `${lives - 1} LIVES LEFT` : 'FINAL LIFE LOST'}
             </Text>
           </View>
@@ -1358,64 +1380,82 @@ export default function GameScreen({
           Phase 'glow': frozen screen + Power Up pose + radial glow
           Phase 'modal': branded unlock modal with Flame Chalice
           ============================================================ */}
-      {powerUpPhase && (
-        <View style={styles.ceremonyOverlay}>
-          {/* Dark tinted backdrop so the frozen world recedes */}
-          <View style={styles.ceremonyBackdrop} />
+      {powerUpPhase && (() => {
+        const { shortEdge, modalWidth, font: f } = responsive;
+        const ringOuter = Math.round(shortEdge * 1.05);
+        const ringMid = Math.round(shortEdge * 0.7);
+        const ringInner = Math.round(shortEdge * 0.45);
+        const spriteH = Math.round(shortEdge * 0.56);
+        const spriteW = Math.round(spriteH * (200 / 230));
+        const chaliceW = Math.round(modalWidth * 0.6);
+        const chaliceH = Math.round(chaliceW / 1.91);
+        const cardPad = Math.round(Math.min(modalWidth * 0.08, 28));
 
-          {powerUpPhase === 'glow' && (
-            <View style={styles.ceremonyCenter}>
-              {/* Radial glow rings behind the character */}
-              <View style={[styles.glowRing, styles.glowRingOuter]} />
-              <View style={[styles.glowRing, styles.glowRingMid]} />
-              <View style={[styles.glowRing, styles.glowRingInner]} />
-              {/* Power Up sprite */}
-              <Image
-                source={require('../assets/Power Up.png')}
-                style={styles.powerUpSprite}
-                resizeMode="contain"
-              />
-              <Text style={styles.powerUpText}>POWER UP</Text>
-            </View>
-          )}
+        return (
+          <View style={styles.ceremonyOverlay}>
+            {/* Dark tinted backdrop so the frozen world recedes */}
+            <View style={styles.ceremonyBackdrop} />
 
-          {powerUpPhase === 'modal' && (
-            <View style={styles.ceremonyCenter}>
-              {/* Glow persists behind the modal */}
-              <View style={[styles.glowRing, styles.glowRingOuter, { opacity: 0.15 }]} />
-
-              <View style={styles.unlockCard}>
-                <Text style={styles.unlockEyebrow}>NEW ABILITY UNLOCKED</Text>
-
-                <View style={styles.unlockDivider} />
-
-                {/* Flame Chalice showcase */}
+            {powerUpPhase === 'glow' && (
+              <View style={styles.ceremonyCenter}>
+                {/* Radial glow rings behind the character */}
+                <View style={[styles.glowRing, styles.glowRingOuter, { width: ringOuter, height: ringOuter }]} />
+                <View style={[styles.glowRing, styles.glowRingMid, { width: ringMid, height: ringMid }]} />
+                <View style={[styles.glowRing, styles.glowRingInner, { width: ringInner, height: ringInner }]} />
+                {/* Power Up sprite */}
                 <Image
-                  source={require('../assets/FLAME CHALACE IMAGE.png')}
-                  style={styles.chaliceImage}
+                  source={require('../assets/Power Up.png')}
+                  style={[styles.powerUpSprite, { width: spriteW, height: spriteH }]}
                   resizeMode="contain"
                 />
-
-                <Text style={styles.unlockTitle}>FLAME CHALICE</Text>
-                <Text style={styles.unlockDesc}>
-                  Press F or tap FIRE to shoot{'\n'}fireballs and defeat enemies
-                </Text>
-
-                <TouchableOpacity
-                  style={styles.unlockBtn}
-                  onPress={() => {
-                    audio.play('menuClick');
-                    setPowerUpPhase(null);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.unlockBtnText}>ACCEPT</Text>
-                </TouchableOpacity>
+                <Text style={[styles.powerUpText, { fontSize: f(36) }]}>POWER UP</Text>
               </View>
-            </View>
-          )}
-        </View>
-      )}
+            )}
+
+            {powerUpPhase === 'modal' && (
+              <View style={styles.ceremonyCenter}>
+                {/* Glow persists behind the modal */}
+                <View style={[styles.glowRing, styles.glowRingOuter, { width: ringOuter, height: ringOuter, opacity: 0.15 }]} />
+
+                <View style={[styles.unlockCard, { width: modalWidth, padding: cardPad }]}>
+                  <Text style={[styles.unlockEyebrow, { fontSize: f(13) }]}>NEW ABILITY UNLOCKED</Text>
+
+                  <View style={styles.unlockDivider} />
+
+                  {/* Flame Chalice showcase */}
+                  <Image
+                    source={require('../assets/FLAME CHALACE IMAGE.png')}
+                    style={[styles.chaliceImage, { width: chaliceW, height: chaliceH }]}
+                    resizeMode="contain"
+                  />
+
+                  <Text style={[styles.unlockTitle, { fontSize: f(26) }]}>FLAME CHALICE</Text>
+                  <Text style={[styles.unlockDesc, { fontSize: f(14), lineHeight: f(22) }]}>
+                    Press F or tap FIRE to shoot{'\n'}fireballs and defeat enemies
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.unlockBtn,
+                      {
+                        paddingVertical: Math.round(12 * responsive.uiScale),
+                        paddingHorizontal: Math.round(44 * responsive.uiScale),
+                      },
+                    ]}
+                    onPress={() => {
+                      audio.play('menuClick');
+                      setPowerUpPhase(null);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.unlockBtnText, { fontSize: f(18) }]}>ACCEPT</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        );
+      })()}
     </View>
   );
 }

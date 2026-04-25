@@ -3,7 +3,7 @@
     "name": "a0-project",
     "slug": "snack-d6b3e175-52f8-424a-af57-9f29bec02e42",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,

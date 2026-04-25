@@ -7,6 +7,7 @@ import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BRAND } from '../config/constants';
 import { audio } from '../lib/audio';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface GameOverScreenProps {
   finalScore: number;
@@ -15,41 +16,59 @@ interface GameOverScreenProps {
 }
 
 export default function GameOverScreen({ finalScore, onRetry, onMenu }: GameOverScreenProps) {
+  const { insets, font, uiScale, width } = useResponsive();
+
   useEffect(() => {
     audio.play('gameOver');
   }, []);
 
+  const actionsWidth = Math.min(320, Math.round(width * 0.55));
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.eyebrow}>SIGNAL LOST</Text>
-      <Text style={styles.title}>GAME OVER</Text>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: Math.max(24, insets.top + 20),
+          paddingBottom: Math.max(24, insets.bottom + 20),
+          paddingHorizontal: Math.max(24, insets.left + 24, insets.right + 24),
+        },
+      ]}
+    >
+      <Text style={[styles.eyebrow, { fontSize: font(14) }]}>SIGNAL LOST</Text>
+      <Text style={[styles.title, { fontSize: font(52) }]}>GAME OVER</Text>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { marginVertical: Math.round(22 * uiScale) }]} />
 
-      <Text style={styles.scoreLabel}>FINAL SCORE</Text>
-      <Text style={styles.scoreValue}>{finalScore}</Text>
+      <Text style={[styles.scoreLabel, { fontSize: font(14) }]}>FINAL SCORE</Text>
+      <Text style={[styles.scoreValue, { fontSize: font(44) }]}>{finalScore}</Text>
 
-      <View style={styles.actions}>
+      <View
+        style={[
+          styles.actions,
+          { width: actionsWidth, marginTop: Math.round(32 * uiScale), gap: Math.round(10 * uiScale) },
+        ]}
+      >
         <TouchableOpacity
-          style={styles.primaryBtn}
+          style={[styles.primaryBtn, { paddingVertical: Math.round(14 * uiScale) }]}
           onPress={() => {
             audio.play('menuClick');
             onRetry();
           }}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryBtnText}>RUN IT BACK</Text>
+          <Text style={[styles.primaryBtnText, { fontSize: font(18) }]}>RUN IT BACK</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.secondaryBtn}
+          style={[styles.secondaryBtn, { paddingVertical: Math.round(12 * uiScale) }]}
           onPress={() => {
             audio.play('menuClick');
             onMenu();
           }}
           activeOpacity={0.85}
         >
-          <Text style={styles.secondaryBtnText}>MAIN MENU</Text>
+          <Text style={[styles.secondaryBtnText, { fontSize: font(14) }]}>MAIN MENU</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -62,20 +81,17 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.nightPurple,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
   },
   eyebrow: {
     color: BRAND.reggaeRed,
-    fontSize: 14,
     letterSpacing: 6,
     fontWeight: 'bold',
   },
   title: {
     color: BRAND.offWhite,
-    fontSize: 56,
     fontWeight: '900',
     letterSpacing: 4,
-    marginTop: 10,
+    marginTop: 8,
     textShadowColor: BRAND.reggaeRed,
     textShadowOffset: { width: 3, height: 3 },
     textShadowRadius: 0,
@@ -84,29 +100,23 @@ const styles = StyleSheet.create({
     height: 2,
     width: 120,
     backgroundColor: BRAND.reggaeRed,
-    marginVertical: 26,
     borderRadius: 2,
   },
   scoreLabel: {
     color: BRAND.neonTeal,
-    fontSize: 14,
     letterSpacing: 3,
     fontWeight: 'bold',
   },
   scoreValue: {
     color: BRAND.gold,
-    fontSize: 48,
     fontWeight: '900',
-    marginTop: 6,
+    marginTop: 4,
     letterSpacing: 2,
   },
   actions: {
-    marginTop: 40,
-    width: 280,
-    gap: 12,
+    alignItems: 'stretch',
   },
   primaryBtn: {
-    paddingVertical: 16,
     borderRadius: 12,
     backgroundColor: BRAND.sunsetOrange,
     alignItems: 'center',
@@ -115,12 +125,10 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: BRAND.nightPurple,
-    fontSize: 18,
     fontWeight: '900',
     letterSpacing: 4,
   },
   secondaryBtn: {
-    paddingVertical: 13,
     borderRadius: 10,
     alignItems: 'center',
     borderWidth: 2,
@@ -128,7 +136,6 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: {
     color: BRAND.neonTeal,
-    fontSize: 14,
     fontWeight: 'bold',
     letterSpacing: 3,
   },

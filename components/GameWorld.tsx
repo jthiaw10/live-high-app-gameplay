@@ -27,6 +27,10 @@ import {
   Goal,
   Particle,
   Projectile,
+  EnemyProjectile,
+  Checkpoint,
+  SpeedBoost,
+  Boss,
 } from '../types/game';
 import {
   BRAND,
@@ -56,6 +60,10 @@ interface GameWorldProps {
   screenHeight: number;
   /** Level width in world coords (for bg parallax sizing). */
   levelWidth: number;
+  checkpoints: Checkpoint[];
+  speedBoosts: SpeedBoost[];
+  boss: Boss | null;
+  enemyProjectiles: EnemyProjectile[];
 }
 
 export default function GameWorld({
@@ -75,6 +83,10 @@ export default function GameWorld({
   screenWidth,
   screenHeight,
   levelWidth,
+  checkpoints,
+  speedBoosts,
+  boss,
+  enemyProjectiles,
 }: GameWorldProps) {
   // World→screen helpers. Everything positioned in this component uses
   // world coordinates as input; these helpers multiply by the render
@@ -544,6 +556,193 @@ export default function GameWorld({
     );
   };
 
+  const renderCheckpoint = (cp: Checkpoint) => {
+    const flagColor = cp.activated ? BRAND.reggaeGreen : BRAND.gold;
+    const t = Date.now() / 1000;
+    const wave = cp.activated ? Math.sin(t * 4) * 3 : 0;
+    return (
+      <View
+        key={cp.id}
+        style={{
+          position: 'absolute',
+          left: xToScreen(cp.x),
+          top: yToScreen(cp.y),
+        }}
+        pointerEvents="none"
+      >
+        {/* Pole */}
+        <View style={{
+          position: 'absolute', left: px(16), top: 0,
+          width: px(4), height: px(cp.height),
+          backgroundColor: '#888', borderRadius: px(2),
+        }} />
+        {/* Flag */}
+        <View style={{
+          position: 'absolute', left: px(20), top: px(4 + wave),
+          width: px(30), height: px(22),
+          backgroundColor: flagColor, borderRadius: px(3),
+          opacity: cp.activated ? 1 : 0.7,
+        }} />
+        {cp.activated && (
+          <View style={{
+            position: 'absolute', left: px(8), bottom: px(-10),
+            width: px(24), height: px(8),
+            backgroundColor: BRAND.reggaeGreen, opacity: 0.4,
+            borderRadius: px(12),
+          }} />
+        )}
+      </View>
+    );
+  };
+
+  const renderSpeedBoost = (sb: SpeedBoost) => {
+    if (sb.collected) return null;
+    const t = Date.now() / 1000;
+    const bob = Math.sin(t * 4 + sb.x * 0.01) * 5;
+    const glow = 0.5 + Math.sin(t * 6) * 0.2;
+    return (
+      <View
+        key={sb.id}
+        style={{
+          position: 'absolute',
+          left: xToScreen(sb.x),
+          top: yToScreen(sb.y + bob),
+          width: px(sb.width),
+          height: px(sb.height),
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        pointerEvents="none"
+      >
+        <View style={{
+          position: 'absolute',
+          width: px(sb.width * 1.5), height: px(sb.height * 1.5),
+          borderRadius: px(sb.width),
+          backgroundColor: BRAND.neonTeal, opacity: glow * 0.3,
+        }} />
+        <View style={{
+          width: px(sb.width * 0.7), height: px(sb.height * 0.7),
+          backgroundColor: BRAND.neonTeal, borderRadius: px(sb.width),
+          borderWidth: 2, borderColor: BRAND.offWhite,
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Text style={{ color: '#fff', fontSize: Math.max(10, px(14)), fontWeight: '900' }}>
+            {'>>'}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderBoss = (b: Boss) => {
+    if (b.phase === 'defeated') return null;
+    const isVulnerable = b.phase === 'vulnerable';
+    const isCharging = b.phase === 'charge';
+    const t = Date.now() / 1000;
+    const shake = isCharging ? Math.sin(t * 30) * 3 : 0;
+    const pulse = isVulnerable ? 0.5 + Math.sin(t * 8) * 0.3 : 0;
+
+    return (
+      <View
+        key={b.id}
+        style={{
+          position: 'absolute',
+          left: xToScreen(b.x + shake),
+          top: yToScreen(b.y),
+        }}
+        pointerEvents="none"
+      >
+        {/* Boss body — large dark slab with colored border */}
+        <View style={{
+          width: px(b.width), height: px(b.height),
+          backgroundColor: isVulnerable ? '#5a2040' : '#2a1535',
+          borderWidth: 3,
+          borderColor: isVulnerable ? BRAND.reggaeRed : BRAND.sunsetOrange,
+          borderRadius: px(16),
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          {/* "Face" — two glowing eyes */}
+          <View style={{ flexDirection: 'row', gap: px(20), marginBottom: px(10) }}>
+            <View style={{
+              width: px(14), height: px(14), borderRadius: px(7),
+              backgroundColor: isVulnerable ? BRAND.reggaeRed : BRAND.gold,
+            }} />
+            <View style={{
+              width: px(14), height: px(14), borderRadius: px(7),
+              backgroundColor: isVulnerable ? BRAND.reggaeRed : BRAND.gold,
+            }} />
+          </View>
+          {/* "Mouth" */}
+          <View style={{
+            width: px(40), height: px(8), borderRadius: px(4),
+            backgroundColor: isCharging ? BRAND.reggaeRed : '#444',
+          }} />
+        </View>
+        {/* Vulnerable glow */}
+        {isVulnerable && (
+          <View style={{
+            position: 'absolute', left: px(-10), top: px(-10),
+            width: px(b.width + 20), height: px(b.height + 20),
+            borderRadius: px(20), borderWidth: 3,
+            borderColor: BRAND.reggaeRed, opacity: pulse,
+          }} />
+        )}
+        {/* Health bar above boss */}
+        <View style={{
+          position: 'absolute', top: px(-20),
+          left: px(10), right: px(10), height: px(8),
+          backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: px(4),
+        }}>
+          <View style={{
+            width: `${(b.health / b.maxHealth) * 100}%` as any,
+            height: px(8), borderRadius: px(4),
+            backgroundColor: b.health > 2 ? BRAND.reggaeGreen : BRAND.reggaeRed,
+          }} />
+        </View>
+      </View>
+    );
+  };
+
+  const renderEnemyProjectile = (ep: EnemyProjectile) => {
+    const alpha = Math.max(0.4, ep.life / ep.maxLife);
+    // Compute rotation from velocity direction.
+    const angle = Math.atan2(ep.vy, ep.vx) * (180 / Math.PI);
+    return (
+      <View
+        key={ep.id}
+        style={{
+          position: 'absolute',
+          left: xToScreen(ep.x),
+          top: yToScreen(ep.y),
+          width: px(ep.width),
+          height: px(ep.height),
+          transform: [{ rotate: `${angle}deg` }],
+          opacity: alpha,
+        }}
+        pointerEvents="none"
+      >
+        {/* Turquoise laser core */}
+        <View style={{
+          position: 'absolute', left: 0, top: 0,
+          width: px(ep.width), height: px(ep.height),
+          backgroundColor: '#0099cc',
+          borderRadius: px(ep.height),
+          borderWidth: 1,
+          borderColor: '#66eeff',
+        }} />
+        {/* Bright center */}
+        <View style={{
+          position: 'absolute',
+          left: px(3), top: px(1),
+          width: px(ep.width - 6),
+          height: px(ep.height - 2),
+          backgroundColor: '#33ddff',
+          borderRadius: px(ep.height),
+        }} />
+      </View>
+    );
+  };
+
   const renderParticle = (p: Particle) => {
     const alpha = Math.max(0, p.life / p.maxLife);
     const size = p.size * (p.type === 'spark' ? alpha : 1);
@@ -580,31 +779,71 @@ export default function GameWorld({
   // -----------------------------------------------------------------
   const ROAD_TILE_WORLD_W = 808;
   const ROAD_TILE_WORLD_H = 65;
+  // The dark pothole pit in the Road with pothole.png image spans
+  // from pixel 394 to 636 (243px wide) within the 808px tile.
+  // When placing the pothole tile over a gap, we position the tile
+  // so tile_x + 394 = gap_left, meaning the dark pixels line up
+  // exactly with the physical gap in the ground platform.
+  const POTHOLE_LEFT_OFFSET = 394;
 
-  // Detect gaps between ground-level platforms for pothole placement.
+  // Detect ground-level platform spans and gaps between them.
+  // Road tiles render ONLY over ground spans. Gaps are left empty
+  // except for a pothole overlay, so the player can see exactly
+  // where they'll fall.
   const groundPlats = platforms
     .filter((p) => p.y >= GAME_CONFIG.GROUND_Y - 2)
     .sort((a, b) => a.x - b.x);
 
-  const gaps: { cx: number }[] = [];
-  for (let i = 0; i < groundPlats.length - 1; i++) {
-    const rightEdge = groundPlats[i].x + groundPlats[i].width;
-    const leftEdge = groundPlats[i + 1].x;
-    if (leftEdge - rightEdge > 20) {
-      gaps.push({ cx: (rightEdge + leftEdge) / 2 });
+  // Merge overlapping ground spans into a single list.
+  const groundSpans: { left: number; right: number }[] = [];
+  for (const p of groundPlats) {
+    const right = p.x + p.width;
+    if (groundSpans.length > 0 && p.x <= groundSpans[groundSpans.length - 1].right) {
+      groundSpans[groundSpans.length - 1].right = Math.max(
+        groundSpans[groundSpans.length - 1].right,
+        right
+      );
+    } else {
+      groundSpans.push({ left: p.x, right });
     }
   }
 
-  // Road tiles — normal road covering the full level width.
-  const visWorldLeft = cameraX - ROAD_TILE_WORLD_W;
-  const visWorldRight = cameraX + screenWidth / S + ROAD_TILE_WORLD_W;
-  const firstRoadTile = Math.floor(visWorldLeft / ROAD_TILE_WORLD_W);
-  const lastRoadTile = Math.ceil(visWorldRight / ROAD_TILE_WORLD_W);
+  // Gaps = spaces between consecutive merged ground spans.
+  const gaps: { left: number; right: number; cx: number }[] = [];
+  for (let i = 0; i < groundSpans.length - 1; i++) {
+    const gapLeft = groundSpans[i].right;
+    const gapRight = groundSpans[i + 1].left;
+    if (gapRight - gapLeft > 20) {
+      gaps.push({ left: gapLeft, right: gapRight, cx: (gapLeft + gapRight) / 2 });
+    }
+  }
 
-  // Road bottom edge pinned to the bottom of the screen.
+  // Road rendering constants.
   const roadHPx = px(ROAD_TILE_WORLD_H);
   const roadWPx = px(ROAD_TILE_WORLD_W);
   const roadTopScreen = screenHeight - roadHPx;
+  const visWorldLeft = cameraX - ROAD_TILE_WORLD_W;
+  const visWorldRight = cameraX + screenWidth / S + ROAD_TILE_WORLD_W;
+
+  // Build road tiles that ONLY cover ground spans (not gaps).
+  // For each ground span, tile Road.png across it.
+  const roadTiles: { worldX: number; worldW: number }[] = [];
+  for (const span of groundSpans) {
+    // Skip spans entirely outside visible range.
+    if (span.right < visWorldLeft || span.left > visWorldRight) continue;
+    // Tile across this span.
+    const firstTile = Math.floor(span.left / ROAD_TILE_WORLD_W);
+    const lastTile = Math.ceil(span.right / ROAD_TILE_WORLD_W);
+    for (let ti = firstTile; ti <= lastTile; ti++) {
+      const tileLeft = ti * ROAD_TILE_WORLD_W;
+      const tileRight = tileLeft + ROAD_TILE_WORLD_W;
+      // Skip if tile is entirely outside this ground span.
+      if (tileRight <= span.left || tileLeft >= span.right) continue;
+      // Skip if outside visible range.
+      if (tileRight < visWorldLeft || tileLeft > visWorldRight) continue;
+      roadTiles.push({ worldX: tileLeft, worldW: ROAD_TILE_WORLD_W });
+    }
+  }
 
   return (
     <View style={styles.world}>
@@ -628,36 +867,32 @@ export default function GameWorld({
         );
       })}
 
-      {/* Road tile strip — normal Road.png across the whole level */}
-      {(() => {
-        const tiles = [];
-        for (let i = firstRoadTile; i <= lastRoadTile; i++) {
-          tiles.push(
-            <Image
-              key={`road-${i}`}
-              source={require('../assets/Road.png')}
-              style={{
-                position: 'absolute',
-                left: xToScreen(i * ROAD_TILE_WORLD_W),
-                top: roadTopScreen,
-                width: roadWPx,
-                height: roadHPx,
-              }}
-              resizeMode="stretch"
-            />
-          );
-        }
-        return tiles;
-      })()}
+      {/* Road tiles — only rendered over ground platform spans.
+          Gaps between ground platforms show as empty (no road). */}
+      {roadTiles.map((tile, i) => (
+        <Image
+          key={`road-${i}`}
+          source={require('../assets/Road.png')}
+          style={{
+            position: 'absolute',
+            left: xToScreen(tile.worldX),
+            top: roadTopScreen,
+            width: roadWPx,
+            height: roadHPx,
+          }}
+          resizeMode="stretch"
+        />
+      ))}
 
-      {/* Pothole overlays — Road with pothole.png centered on each gap */}
+      {/* Pothole images at each gap — positioned so the dark pit
+          pixels in the image line up with the physical gap. */}
       {gaps.map((gap, i) => (
         <Image
           key={`pothole-${i}`}
           source={require('../assets/Road with pothole.png')}
           style={{
             position: 'absolute',
-            left: xToScreen(gap.cx - ROAD_TILE_WORLD_W / 2),
+            left: xToScreen(gap.left - POTHOLE_LEFT_OFFSET),
             top: roadTopScreen,
             width: roadWPx,
             height: roadHPx,
@@ -672,14 +907,26 @@ export default function GameWorld({
       {/* End-of-level goal */}
       {renderGoal()}
 
+      {/* Checkpoints */}
+      {checkpoints.map(renderCheckpoint)}
+
+      {/* Speed boosts */}
+      {speedBoosts.map(renderSpeedBoost)}
+
       {/* Collectible Coins */}
       {collectibles.map(renderCollectible)}
+
+      {/* Boss */}
+      {boss && renderBoss(boss)}
 
       {/* Enemies */}
       {enemies.map(renderEnemy)}
 
       {/* Fire-shot projectiles */}
       {projectiles.map(renderProjectile)}
+
+      {/* Enemy laser projectiles */}
+      {enemyProjectiles.map(renderEnemyProjectile)}
 
       {/* Particle effects on top of everything */}
       {particles.map(renderParticle)}

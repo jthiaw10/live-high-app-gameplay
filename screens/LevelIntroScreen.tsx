@@ -7,6 +7,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { BRAND } from '../config/constants';
 import { audio } from '../lib/audio';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface LevelIntroScreenProps {
   levelNumber: number;
@@ -28,6 +29,7 @@ export default function LevelIntroScreen({
   onContinue,
 }: LevelIntroScreenProps) {
   const fade = useRef(new Animated.Value(0)).current;
+  const { insets, font, uiScale } = useResponsive();
 
   useEffect(() => {
     Animated.timing(fade, {
@@ -44,27 +46,44 @@ export default function LevelIntroScreen({
   }, [fade, onContinue]);
 
   return (
-    <Animated.View style={[styles.container, { opacity: fade }]}>
-      <Text style={styles.eyebrow}>LEVEL {levelNumber}</Text>
-      <Text style={styles.title}>{levelName.toUpperCase()}</Text>
-      <Text style={styles.tagline}>{tagline}</Text>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: fade,
+          paddingTop: Math.max(24, insets.top + 20),
+          paddingBottom: Math.max(24, insets.bottom + 20),
+          paddingHorizontal: Math.max(24, insets.left + 24, insets.right + 24),
+        },
+      ]}
+    >
+      <Text style={[styles.eyebrow, { fontSize: font(14) }]}>LEVEL {levelNumber}</Text>
+      <Text style={[styles.title, { fontSize: font(40) }]}>{levelName.toUpperCase()}</Text>
+      <Text style={[styles.tagline, { fontSize: font(14) }]}>{tagline}</Text>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { marginVertical: Math.round(20 * uiScale) }]} />
 
-      <View style={styles.stats}>
-        <Text style={styles.statText}>LIVES  {livesRemaining}</Text>
-        <Text style={styles.statText}>SCORE  {runningScore}</Text>
+      <View style={[styles.stats, { gap: Math.round(28 * uiScale) }]}>
+        <Text style={[styles.statText, { fontSize: font(14) }]}>LIVES  {livesRemaining}</Text>
+        <Text style={[styles.statText, { fontSize: font(14) }]}>SCORE  {runningScore}</Text>
       </View>
 
       <TouchableOpacity
-        style={styles.skipBtn}
+        style={[
+          styles.skipBtn,
+          {
+            bottom: Math.max(20, insets.bottom + 14),
+            paddingHorizontal: Math.round(22 * uiScale),
+            paddingVertical: Math.round(9 * uiScale),
+          },
+        ]}
         onPress={() => {
           audio.play('menuClick');
           onContinue();
         }}
         activeOpacity={0.8}
       >
-        <Text style={styles.skipText}>SKIP</Text>
+        <Text style={[styles.skipText, { fontSize: font(12) }]}>SKIP</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -76,27 +95,24 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.nightPurple,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
   },
   eyebrow: {
     color: BRAND.neonTeal,
-    fontSize: 14,
     letterSpacing: 6,
     fontWeight: 'bold',
   },
   title: {
     color: BRAND.gold,
-    fontSize: 40,
     fontWeight: '900',
     letterSpacing: 3,
     marginTop: 10,
     textShadowColor: BRAND.sunsetOrange,
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 0,
+    textAlign: 'center',
   },
   tagline: {
     color: BRAND.offWhite,
-    fontSize: 14,
     marginTop: 10,
     letterSpacing: 1,
     fontStyle: 'italic',
@@ -106,31 +122,24 @@ const styles = StyleSheet.create({
     height: 2,
     width: 100,
     backgroundColor: BRAND.sunsetOrange,
-    marginVertical: 24,
     borderRadius: 2,
   },
   stats: {
     flexDirection: 'row',
-    gap: 30,
   },
   statText: {
     color: BRAND.neonTeal,
-    fontSize: 14,
     letterSpacing: 2,
     fontWeight: 'bold',
   },
   skipBtn: {
     position: 'absolute',
-    bottom: 30,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: BRAND.neonTeal,
   },
   skipText: {
     color: BRAND.neonTeal,
-    fontSize: 12,
     letterSpacing: 3,
     fontWeight: 'bold',
   },

@@ -7,6 +7,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BRAND } from '../config/constants';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface PauseOverlayProps {
   levelName: string;
@@ -21,26 +22,45 @@ export default function PauseOverlay({
   onRestart,
   onQuit,
 }: PauseOverlayProps) {
+  const { modalWidth, font, uiScale } = useResponsive();
+  const cardPad = Math.round(20 * uiScale);
+  const btnPad = Math.round(12 * uiScale);
+  const btnGap = Math.round(8 * uiScale);
+
   return (
     <View style={styles.overlay}>
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>PAUSED</Text>
-        <Text style={styles.title}>{levelName.toUpperCase()}</Text>
-        <View style={styles.divider} />
+      <View style={[styles.card, { width: modalWidth, padding: cardPad }]}>
+        <Text style={[styles.eyebrow, { fontSize: font(12) }]}>PAUSED</Text>
+        <Text style={[styles.title, { fontSize: font(22) }]}>{levelName.toUpperCase()}</Text>
+        <View style={[styles.divider, { marginVertical: Math.round(14 * uiScale) }]} />
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={onResume} activeOpacity={0.8}>
-          <Text style={styles.primaryBtnText}>RESUME</Text>
+        <TouchableOpacity
+          style={[styles.primaryBtn, { paddingVertical: btnPad, marginBottom: btnGap }]}
+          onPress={onResume}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.primaryBtnText, { fontSize: font(16) }]}>RESUME</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.secondaryBtn} onPress={onRestart} activeOpacity={0.8}>
-          <Text style={styles.secondaryBtnText}>RESTART LEVEL</Text>
+        <TouchableOpacity
+          style={[styles.secondaryBtn, { paddingVertical: btnPad, marginBottom: btnGap }]}
+          onPress={onRestart}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.secondaryBtnText, { fontSize: font(15) }]}>RESTART LEVEL</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tertiaryBtn} onPress={onQuit} activeOpacity={0.8}>
-          <Text style={styles.tertiaryBtnText}>QUIT TO MENU</Text>
+        <TouchableOpacity
+          style={[styles.tertiaryBtn, { paddingVertical: btnPad }]}
+          onPress={onQuit}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tertiaryBtnText, { fontSize: font(14) }]}>QUIT TO MENU</Text>
         </TouchableOpacity>
 
-        <Text style={styles.hint}>ESC to resume • R to restart</Text>
+        <Text style={[styles.hint, { fontSize: font(11), marginTop: Math.round(12 * uiScale) }]}>
+          ESC to resume • R to restart
+        </Text>
       </View>
     </View>
   );
@@ -58,8 +78,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: {
-    width: 320,
-    padding: 28,
     borderRadius: 18,
     backgroundColor: BRAND.nightPurple,
     borderWidth: 2,
@@ -72,14 +90,12 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: BRAND.neonTeal,
-    fontSize: 12,
     letterSpacing: 5,
     fontWeight: 'bold',
     marginBottom: 4,
   },
   title: {
     color: BRAND.gold,
-    fontSize: 22,
     fontWeight: 'bold',
     letterSpacing: 2,
   },
@@ -87,42 +103,34 @@ const styles = StyleSheet.create({
     height: 2,
     width: 80,
     backgroundColor: BRAND.sunsetOrange,
-    marginVertical: 18,
     borderRadius: 2,
   },
   primaryBtn: {
     width: '100%',
-    paddingVertical: 14,
     borderRadius: 10,
     backgroundColor: BRAND.neonTeal,
     alignItems: 'center',
-    marginBottom: 10,
   },
   primaryBtnText: {
     color: BRAND.nightPurple,
-    fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 2,
   },
   secondaryBtn: {
     width: '100%',
-    paddingVertical: 13,
     borderRadius: 10,
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: BRAND.gold,
     alignItems: 'center',
-    marginBottom: 10,
   },
   secondaryBtnText: {
     color: BRAND.gold,
-    fontSize: 15,
     fontWeight: 'bold',
     letterSpacing: 2,
   },
   tertiaryBtn: {
     width: '100%',
-    paddingVertical: 12,
     borderRadius: 10,
     backgroundColor: 'transparent',
     borderWidth: 2,
@@ -131,14 +139,11 @@ const styles = StyleSheet.create({
   },
   tertiaryBtnText: {
     color: BRAND.reggaeRed,
-    fontSize: 14,
     fontWeight: 'bold',
     letterSpacing: 2,
   },
   hint: {
-    marginTop: 16,
     color: 'rgba(245, 241, 232, 0.5)',
-    fontSize: 11,
     letterSpacing: 1,
   },
 });

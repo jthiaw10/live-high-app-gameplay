@@ -128,6 +128,76 @@ export const PROJECTILE = {
 } as const;
 
 /**
+ * Breakable platform timing.
+ */
+export const BREAKABLE = {
+  /** ms after landing before the platform breaks. */
+  WARN_MS: 800,
+  /** ms of "crumbling" visual before the platform vanishes. */
+  CRUMBLE_MS: 300,
+} as const;
+
+/**
+ * Speed boost power-up.
+ */
+export const SPEED_BOOST = {
+  DURATION_MS: 5000,
+  MULTIPLIER: 1.55,
+  /** Pickup hitbox size in world coords. */
+  SIZE: 44,
+} as const;
+
+/**
+ * Combo scoring.
+ */
+export const COMBO = {
+  /** ms window to chain the next action before combo resets. */
+  WINDOW_MS: 2200,
+  /** Maximum multiplier. */
+  MAX_MULT: 4,
+  /** Actions needed to advance: 1→x2 at 2, x2→x3 at 4, x3→x4 at 6. */
+  THRESHOLDS: [2, 4, 6],
+} as const;
+
+/**
+ * Boss tuning.
+ */
+export const BOSS_CONFIG = {
+  WIDTH: 120,
+  HEIGHT: 140,
+  MAX_HEALTH: 5,
+  CHARGE_SPEED: 420,
+  /** Durations per phase (ms). */
+  IDLE_MS: 1200,
+  CHARGE_MS: 1800,
+  VULNERABLE_MS: 1600,
+  /** Player bounce-back velocity on boss contact. */
+  KNOCKBACK_VX: 350,
+} as const;
+
+/**
+ * Drone laser.
+ */
+export const DRONE_LASER = {
+  SPEED: 400,         // px/s
+  WIDTH: 20,
+  HEIGHT: 8,
+  LIFE_MS: 2000,      // travels ~800px before fizzling
+  COOLDOWN_MS: 2400,  // time between shots per drone
+} as const;
+
+/**
+ * Stomp mechanic.
+ */
+export const STOMP = {
+  /** Player velocity.y bounce after stomping an enemy. */
+  BOUNCE_VY: -550,
+  /** How far above enemy.y the player's bottom must be to count
+   *  as a stomp vs a side hit. Fraction of enemy height. */
+  TOP_FRACTION: 0.35,
+} as const;
+
+/**
  * Brand palette — derived from the existing Blaze Runner assets.
  * Afro-futurist reggae-cyberpunk: deep night purple, neon teal,
  * sunset orange, gold, reggae red/yellow/green.

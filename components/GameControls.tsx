@@ -7,12 +7,16 @@
  * The FIRE button is always rendered but dimmed until the player
  * picks up the power (coins >= POWER_UNLOCK_COINS), at which point
  * it lights up orange. Tapping it when dimmed does nothing.
+ *
+ * Sizes scale with screen dimensions via useResponsive — on a
+ * 900×400 phone in landscape, buttons end up ~80px tall with
+ * safe-area padding for notch/home indicator.
  */
 
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BRAND } from '../config/constants';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface GameControlsProps {
   onLeftPress: () => void;
@@ -35,41 +39,65 @@ export default function GameControls({
   onShootPress,
   powerUnlocked,
 }: GameControlsProps) {
-  const insets = useSafeAreaInsets();
+  const { insets, buttonSize, primaryButtonSize, secondaryButtonSize, font } = useResponsive();
+
+  const base = Math.round(buttonSize);
+  const jump = Math.round(primaryButtonSize);
+  const fire = Math.round(secondaryButtonSize);
+  const gap = Math.max(10, Math.round(base * 0.18));
+  const sidePad = Math.max(16, Math.round(base * 0.3));
+
+  const buttonStyle = {
+    width: base,
+    height: base,
+    borderRadius: base / 2,
+  };
+  const jumpStyle = {
+    width: jump,
+    height: jump,
+    borderRadius: jump / 2,
+  };
+  const fireStyle = {
+    width: fire,
+    height: fire,
+    borderRadius: fire / 2,
+  };
 
   return (
     <View
       style={[
         styles.container,
         {
-          bottom: insets.bottom,
-          paddingLeft: 20 + Math.max(0, insets.left - 20),
-          paddingRight: 20 + Math.max(0, insets.right - 20),
+          bottom: insets.bottom + Math.max(4, Math.round(base * 0.08)),
+          paddingLeft: sidePad + insets.left,
+          paddingRight: sidePad + insets.right,
         },
       ]}
+      pointerEvents="box-none"
     >
-      <View style={styles.leftControls}>
+      <View style={[styles.leftControls, { gap }]}>
         <TouchableOpacity
-          style={styles.button}
+          style={[styles.button, buttonStyle]}
           onPressIn={onLeftPress}
           onPressOut={onLeftRelease}
           activeOpacity={0.7}
         >
-          <Text style={styles.buttonText}>←</Text>
+          <Text style={[styles.buttonText, { fontSize: font(24) }]}>←</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.button}
+          style={[styles.button, buttonStyle]}
           onPressIn={onRightPress}
           onPressOut={onRightRelease}
           activeOpacity={0.7}
         >
-          <Text style={styles.buttonText}>→</Text>
+          <Text style={[styles.buttonText, { fontSize: font(24) }]}>→</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.rightControls}>
+      <View style={[styles.rightControls, { gap }]}>
         <TouchableOpacity
           style={[
             styles.shootButton,
+            fireStyle,
             !powerUnlocked && styles.shootButtonDimmed,
           ]}
           onPressIn={() => {
@@ -80,6 +108,7 @@ export default function GameControls({
           <Text
             style={[
               styles.shootButtonText,
+              { fontSize: font(16) },
               !powerUnlocked && { opacity: 0.4 },
             ]}
           >
@@ -87,12 +116,12 @@ export default function GameControls({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.button, styles.jumpButton]}
+          style={[styles.button, styles.jumpButton, jumpStyle]}
           onPressIn={onJumpPress}
           onPressOut={onJumpRelease}
           activeOpacity={0.7}
         >
-          <Text style={styles.buttonText}>JUMP</Text>
+          <Text style={[styles.buttonText, { fontSize: font(22) }]}>JUMP</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -107,21 +136,17 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    alignItems: 'flex-end',
   },
   leftControls: {
     flexDirection: 'row',
-    gap: 15,
+    alignItems: 'flex-end',
   },
   rightControls: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 12,
   },
   button: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
     backgroundColor: 'rgba(58, 106, 122, 0.8)',
     borderWidth: 3,
     borderColor: 'rgba(255, 215, 0, 0.6)',
@@ -129,15 +154,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   jumpButton: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
     backgroundColor: 'rgba(255, 107, 53, 0.8)',
   },
   shootButton: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
     backgroundColor: 'rgba(230, 57, 70, 0.85)',
     borderWidth: 3,
     borderColor: BRAND.gold,
@@ -154,12 +173,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
   },
   buttonText: {
-    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
   },
   shootButtonText: {
-    fontSize: 16,
     fontWeight: '900',
     color: '#fff',
     letterSpacing: 2,

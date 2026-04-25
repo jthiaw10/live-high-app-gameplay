@@ -21,6 +21,9 @@ import {
   updateEnemy,
   checkEnemyCollision,
   checkHazardCollision,
+  updateMovingPlatform,
+  updateBreakablePlatform,
+  updateBoss,
   PHYSICS,
 } from '../lib/physics';
 import { getLevel } from '../lib/levels';
@@ -31,6 +34,12 @@ import {
   POWER_UNLOCK_COINS,
   PROJECTILE,
   WORLD_HEIGHT,
+  BREAKABLE,
+  SPEED_BOOST,
+  COMBO,
+  BOSS_CONFIG,
+  STOMP,
+  DRONE_LASER,
 } from '../config/constants';
 import {
   Player,
@@ -45,6 +54,11 @@ import {
   LevelData,
   Particle,
   Projectile,
+  EnemyProjectile,
+  Checkpoint,
+  SpeedBoost,
+  Boss,
+  ComboState,
 } from '../types/game';
 import PlayerSprite from '../components/PlayerSprite';
 import GameWorld from '../components/GameWorld';
@@ -52,6 +66,7 @@ import GameControls from '../components/GameControls';
 import GameHUD from '../components/GameHUD';
 import PauseOverlay from './PauseOverlay';
 import LevelCompleteOverlay from './LevelCompleteOverlay';
+import { useResponsive } from '../hooks/useResponsive';
 
 const {
   PLAYER_WIDTH,
@@ -91,9 +106,14 @@ interface GameState {
   enemies: Enemy[];
   hazards: Hazard[];
   goal: Goal;
+  checkpoints: Checkpoint[];
+  speedBoosts: SpeedBoost[];
+  boss: Boss | null;
+  combo: ComboState;
   progression: ProgressionState;
   particles: Particle[];
   projectiles: Projectile[];
+  enemyProjectiles: EnemyProjectile[];
   cameraX: number;
   cameraShake: number;
   levelWidth: number;
@@ -101,6 +121,8 @@ interface GameState {
   isDying: boolean;
   deathTimer: number;
   isLevelComplete: boolean;
+  /** World-x of the last activated checkpoint (null = use level spawn). */
+  lastCheckpointX: number | null;
 }
 
 // Monotonic counter for projectile ids.
@@ -217,10 +239,10 @@ function buildInitialState(level: LevelData): GameState {
       jumpsRemaining: PLAYER_MAX_JUMPS,
       shootCooldownMs: 0,
       shootAnimMs: 0,
+      speedBoostMs: 0,
     },
-    platforms: level.platforms,
+    platforms: level.platforms.map((p) => ({ ...p, broken: false, breakTimer: undefined })),
     props: level.props,
-    // Deep copy mutable fields so replays start clean.
     collectibles: level.collectibles.map((c) => ({ ...c, collected: false })),
     worldProps: level.worldProps,
     enemies: level.enemies.map((e) => ({
@@ -230,6 +252,10 @@ function buildInitialState(level: LevelData): GameState {
     })),
     hazards: level.hazards,
     goal: level.goal,
+    checkpoints: level.checkpoints.map((c) => ({ ...c, activated: false })),
+    speedBoosts: (level.speedBoosts || []).map((s) => ({ ...s, collected: false })),
+    boss: level.boss ? { ...level.boss, phase: 'idle' as const, phaseTimer: BOSS_CONFIG.IDLE_MS } : null,
+    combo: { multiplier: 1, timer: 0, streak: 0 },
     progression: {
       coins: 0,
       exp: 0,
@@ -238,6 +264,7 @@ function buildInitialState(level: LevelData): GameState {
     },
     particles: [],
     projectiles: [],
+    enemyProjectiles: [],
     cameraX: 0,
     cameraShake: 0,
     levelWidth: level.widthPx,
@@ -245,6 +272,7 @@ function buildInitialState(level: LevelData): GameState {
     isDying: false,
     deathTimer: 0,
     isLevelComplete: false,
+    lastCheckpointX: null,
   };
 }
 
@@ -258,6 +286,7 @@ export default function GameScreen({
   onQuitToMenu,
 }: GameScreenProps) {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
+  const responsive = useResponsive();
   const level = getLevel(levelIndex);
 
   // Uniform render scale — world is authored in a 600-tall reference
@@ -415,17 +444,23 @@ export default function GameScreen({
             // persists across levels.
             setTimeout(() => onLifeLost(remaining), 0);
 
-            // Respawn at level start, reset level entities, keep score.
-            cameraXRef.current = 0;
+            // Respawn at last checkpoint (or level start).
+            const respawnX = prevState.lastCheckpointX ?? getLevel(levelIndex).spawn.x;
+            const respawnY = GAME_CONFIG.GROUND_Y - PLAYER_HEIGHT;
+            cameraXRef.current = Math.max(0, respawnX - 300);
             coyoteMs.current = 0;
             jumpBufferMs.current = 0;
             prevGroundedRef.current = true;
             const fresh = buildInitialState(getLevel(levelIndex));
+            fresh.player.position.x = respawnX;
+            fresh.player.position.y = respawnY;
             return {
               ...fresh,
-              // Preserve running coin/exp count so the player doesn't feel
-              // punished for a death in the middle of a collection run.
+              // Preserve checkpoint, progression, and combo state.
+              lastCheckpointX: prevState.lastCheckpointX,
+              checkpoints: prevState.checkpoints,
               progression: prevState.progression,
+              combo: prevState.combo,
             };
           }
 
@@ -451,13 +486,20 @@ export default function GameScreen({
           if (newPlayer.invincibilityTimer === 0) newPlayer.isInvincible = false;
         }
 
+        // Speed boost — tick timer from PREVIOUS frame. The pickup
+        // collision happens later but the timer drives this frame's speed.
+        newPlayer.speedBoostMs = Math.max(0, newPlayer.speedBoostMs - deltaTimeMs);
+        const effectiveMoveSpeed = newPlayer.speedBoostMs > 0
+          ? PHYSICS.MOVE_SPEED * SPEED_BOOST.MULTIPLIER
+          : PHYSICS.MOVE_SPEED;
+
         // Target velocity from input. Zero means "decelerate to rest".
         let targetVx = 0;
         if (inputState.current.left) {
-          targetVx = -PHYSICS.MOVE_SPEED;
+          targetVx = -effectiveMoveSpeed;
           newPlayer.isFacingRight = false;
         } else if (inputState.current.right) {
-          targetVx = PHYSICS.MOVE_SPEED;
+          targetVx = effectiveMoveSpeed;
           newPlayer.isFacingRight = true;
         }
 
@@ -574,7 +616,14 @@ export default function GameScreen({
           newPlayer.velocity.x = 0;
         }
 
-        const collision = checkPlatformCollision(newPlayer, prevState.platforms);
+        // --- Tick moving & breakable platforms before collision ---
+        const newPlatforms = prevState.platforms.map((p) => {
+          if (p.moveType === 'moving') return updateMovingPlatform(p, deltaTimeMs);
+          if (p.moveType === 'breakable') return updateBreakablePlatform(p, deltaTimeMs);
+          return p;
+        }).filter((p) => !p.broken);
+
+        const collision = checkPlatformCollision(newPlayer, newPlatforms);
         const wasAirborne = !prevGroundedRef.current;
         const landingVy = newPlayer.velocity.y;
         if (collision.collided && collision.platform) {
@@ -617,6 +666,116 @@ export default function GameScreen({
         // Progression state — moved here (above projectile collision)
         // so enemy kills can award EXP.
         const newProgression = { ...prevState.progression };
+        let shouldDie = false;
+
+        // --------------------------------------------------------------
+        // Combo state — tick down the window timer. If it hits 0, reset.
+        // advanceCombo() is called by stomp, projectile kill, and coin.
+        // --------------------------------------------------------------
+        const newCombo: ComboState = { ...prevState.combo };
+        if (newCombo.timer > 0) {
+          newCombo.timer = Math.max(0, newCombo.timer - deltaTimeMs);
+          if (newCombo.timer === 0) {
+            newCombo.multiplier = 1;
+            newCombo.streak = 0;
+          }
+        }
+        const advanceCombo = () => {
+          newCombo.streak += 1;
+          newCombo.timer = COMBO.WINDOW_MS;
+          const thresholds = COMBO.THRESHOLDS;
+          if (newCombo.streak >= thresholds[2]) newCombo.multiplier = 4;
+          else if (newCombo.streak >= thresholds[1]) newCombo.multiplier = 3;
+          else if (newCombo.streak >= thresholds[0]) newCombo.multiplier = 2;
+          else newCombo.multiplier = 1;
+          if (newCombo.multiplier > COMBO.MAX_MULT) newCombo.multiplier = COMBO.MAX_MULT;
+        };
+
+        // Start break timer when player lands on a breakable platform.
+        if (newPlayer.isGrounded) {
+          for (let i = 0; i < newPlatforms.length; i++) {
+            const p = newPlatforms[i];
+            if (p.moveType === 'breakable' && !p.broken && p.breakTimer === undefined) {
+              const onIt =
+                newPlayer.position.x + newPlayer.width > p.x &&
+                newPlayer.position.x < p.x + p.width &&
+                Math.abs(newPlayer.position.y + newPlayer.height - p.y) < 8;
+              if (onIt) {
+                newPlatforms[i] = { ...p, breakTimer: BREAKABLE.WARN_MS + BREAKABLE.CRUMBLE_MS };
+              }
+            }
+          }
+        }
+
+        // --------------------------------------------------------------
+        // Speed boost pickup
+        // --------------------------------------------------------------
+        const newSpeedBoosts = prevState.speedBoosts.map((sb) => {
+          if (sb.collected) return sb;
+          const hit =
+            newPlayer.position.x + newPlayer.width > sb.x &&
+            newPlayer.position.x < sb.x + sb.width &&
+            newPlayer.position.y + newPlayer.height > sb.y &&
+            newPlayer.position.y < sb.y + sb.height;
+          if (hit) {
+            newPlayer.speedBoostMs = SPEED_BOOST.DURATION_MS;
+            audio.play('coin');
+            frameParticles.push(
+              ...makeSparkParticles(sb.x + sb.width / 2, sb.y + sb.height / 2)
+            );
+            return { ...sb, collected: true };
+          }
+          return sb;
+        });
+
+        // Clamp velocity to effective speed (in case boost just expired).
+        if (Math.abs(newPlayer.velocity.x) > effectiveMoveSpeed) {
+          newPlayer.velocity.x = Math.sign(newPlayer.velocity.x) * effectiveMoveSpeed;
+        }
+
+        // --------------------------------------------------------------
+        // Checkpoint collision
+        // --------------------------------------------------------------
+        let newLastCheckpointX = prevState.lastCheckpointX;
+        const newCheckpoints = prevState.checkpoints.map((cp) => {
+          if (cp.activated) return cp;
+          const hit =
+            newPlayer.position.x + newPlayer.width > cp.x &&
+            newPlayer.position.x < cp.x + cp.width &&
+            newPlayer.position.y + newPlayer.height > cp.y &&
+            newPlayer.position.y < cp.y + cp.height;
+          if (hit) {
+            newLastCheckpointX = cp.x;
+            audio.play('coin');
+            return { ...cp, activated: true };
+          }
+          return cp;
+        });
+
+        // --------------------------------------------------------------
+        // Boss update (AI phase tick + player collision)
+        // Boss-projectile collision is handled after the projectile
+        // block below so livingProjectiles is available.
+        // --------------------------------------------------------------
+        let newBoss = prevState.boss;
+        if (newBoss && newBoss.phase !== 'defeated') {
+          newBoss = updateBoss(newBoss, newPlayer.position.x, deltaTimeMs);
+
+          if (newBoss.phase === 'charge') {
+            const bossHit =
+              newPlayer.position.x + newPlayer.width > newBoss.x + 10 &&
+              newPlayer.position.x < newBoss.x + newBoss.width - 10 &&
+              newPlayer.position.y + newPlayer.height > newBoss.y + 10 &&
+              newPlayer.position.y < newBoss.y + newBoss.height - 10;
+            if (bossHit) {
+              newPlayer.velocity.x = newPlayer.position.x < newBoss.x
+                ? -BOSS_CONFIG.KNOCKBACK_VX
+                : BOSS_CONFIG.KNOCKBACK_VX;
+              newPlayer.velocity.y = -300;
+              shouldDie = true;
+            }
+          }
+        }
 
         // --------------------------------------------------------------
         // Enemies
@@ -624,6 +783,64 @@ export default function GameScreen({
         const newEnemies = prevState.enemies.map((enemy) =>
           updateEnemy(enemy, newPlayer.position.x, deltaTimeMs)
         );
+
+        // --------------------------------------------------------------
+        // Drone lasers — drones fire at the player when locked on.
+        // Spawn new laser projectiles and update existing ones.
+        // --------------------------------------------------------------
+        const spawnedEnemyProjectiles: EnemyProjectile[] = [];
+        for (let i = 0; i < newEnemies.length; i++) {
+          const e = newEnemies[i];
+          if (e.isDefeated || e.type !== 'drone' || !e.isLockedOn) continue;
+          // Fire when cooldown is 0 (or undefined = first shot).
+          if ((e.shootCooldown ?? 0) <= 0) {
+            // Aim at player's center from drone's center.
+            const dx = (newPlayer.position.x + newPlayer.width / 2) - (e.x + e.width / 2);
+            const dy = (newPlayer.position.y + newPlayer.height / 2) - (e.y + e.height / 2);
+            const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+            const vx = (dx / dist) * DRONE_LASER.SPEED;
+            const vy = (dy / dist) * DRONE_LASER.SPEED;
+            spawnedEnemyProjectiles.push({
+              id: `laser-${Date.now()}-${i}`,
+              x: e.x + e.width / 2 - DRONE_LASER.WIDTH / 2,
+              y: e.y + e.height / 2 - DRONE_LASER.HEIGHT / 2,
+              vx, vy,
+              width: DRONE_LASER.WIDTH,
+              height: DRONE_LASER.HEIGHT,
+              life: DRONE_LASER.LIFE_MS,
+              maxLife: DRONE_LASER.LIFE_MS,
+            });
+            newEnemies[i] = { ...e, shootCooldown: DRONE_LASER.COOLDOWN_MS };
+            audio.play('menuClick');
+          }
+        }
+
+        // Update existing enemy projectiles.
+        const enemyProjPool = [...prevState.enemyProjectiles, ...spawnedEnemyProjectiles];
+        const livingEnemyProj: EnemyProjectile[] = [];
+        for (const ep of enemyProjPool) {
+          const nx = ep.x + ep.vx * dt;
+          const ny = ep.y + ep.vy * dt;
+          const nl = ep.life - deltaTimeMs;
+          if (nl <= 0) continue;
+          // Check if laser hits the player.
+          const hitPlayer =
+            nx + ep.width > newPlayer.position.x + 6 &&
+            nx < newPlayer.position.x + newPlayer.width - 6 &&
+            ny + ep.height > newPlayer.position.y + 6 &&
+            ny < newPlayer.position.y + newPlayer.height - 6;
+          if (hitPlayer && !newPlayer.isInvincible) {
+            shouldDie = true;
+            frameParticles.push(
+              ...makeSparkParticles(
+                newPlayer.position.x + newPlayer.width / 2,
+                newPlayer.position.y + newPlayer.height / 2
+              )
+            );
+            continue; // consume the laser
+          }
+          livingEnemyProj.push({ ...ep, x: nx, y: ny, life: nl });
+        }
 
         // --------------------------------------------------------------
         // Projectiles — motion + TTL + enemy collision.
@@ -658,14 +875,15 @@ export default function GameScreen({
               newEnemies[i] = { ...e, isDefeated: true, health: 0 };
               consumed = true;
               audio.play('hit');
-              // Award EXP for the kill.
-              newProgression.exp += COIN_EXP_VALUE;
+              // Award EXP for the kill (with combo multiplier).
+              advanceCombo();
+              newProgression.exp += COIN_EXP_VALUE * newCombo.multiplier;
               newProgression.expFeedback.push({
                 id: `exp-${Date.now()}-${Math.random()}`,
                 x: e.x + e.width / 2,
                 y: e.y,
                 startTime: Date.now(),
-                amount: COIN_EXP_VALUE,
+                amount: COIN_EXP_VALUE * newCombo.multiplier,
                 kind: 'exp',
               });
               // Kill burst sparks.
@@ -702,11 +920,66 @@ export default function GameScreen({
           });
         }
 
-        let shouldDie = false;
-        for (const enemy of newEnemies) {
+        // Boss-projectile collision (only during vulnerable phase).
+        if (newBoss && newBoss.phase === 'vulnerable') {
+          for (let pi = 0; pi < livingProjectiles.length; pi++) {
+            const p = livingProjectiles[pi];
+            const hit =
+              p.x + p.width > newBoss.x &&
+              p.x < newBoss.x + newBoss.width &&
+              p.y + p.height > newBoss.y &&
+              p.y < newBoss.y + newBoss.height;
+            if (hit) {
+              newBoss = { ...newBoss, health: newBoss.health - 1 };
+              livingProjectiles.splice(pi, 1);
+              pi--;
+              audio.play('hit');
+              frameParticles.push(
+                ...makeSparkParticles(newBoss.x + newBoss.width / 2, newBoss.y + newBoss.height / 2)
+              );
+              if (newBoss.health <= 0) {
+                newBoss = { ...newBoss, phase: 'defeated' };
+                audio.play('levelComplete');
+                newProgression.exp += 50;
+                newProgression.expFeedback.push({
+                  id: `boss-kill-${Date.now()}`,
+                  x: newBoss.x + newBoss.width / 2,
+                  y: newBoss.y,
+                  startTime: Date.now(),
+                  amount: 50,
+                  kind: 'exp',
+                });
+              }
+              break;
+            }
+          }
+        }
+
+        for (let i = 0; i < newEnemies.length; i++) {
+          const enemy = newEnemies[i];
           if (enemy.isDefeated || enemy.health <= 0) continue;
           const col = checkEnemyCollision(newPlayer, enemy);
-          if (col.type === 'damage') {
+          if (col.type === 'stomp') {
+            // Mario-style stomp — defeat the enemy, bounce the player.
+            newEnemies[i] = { ...enemy, isDefeated: true, health: 0 };
+            newPlayer.velocity.y = STOMP.BOUNCE_VY;
+            newPlayer.jumpsRemaining = PLAYER_MAX_JUMPS;
+            audio.play('hit');
+            // Combo + EXP
+            newProgression.exp += COIN_EXP_VALUE * newCombo.multiplier;
+            newProgression.expFeedback.push({
+              id: `exp-stomp-${Date.now()}`,
+              x: enemy.x + enemy.width / 2,
+              y: enemy.y,
+              startTime: Date.now(),
+              amount: COIN_EXP_VALUE * newCombo.multiplier,
+              kind: 'exp',
+            });
+            advanceCombo();
+            frameParticles.push(
+              ...makeSparkParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2)
+            );
+          } else if (col.type === 'damage') {
             shouldDie = true;
             break;
           }
@@ -774,7 +1047,10 @@ export default function GameScreen({
           }
           return coin;
         });
-        if (pickedCoin) audio.play('coin');
+        if (pickedCoin) {
+          audio.play('coin');
+          advanceCombo();
+        }
 
         // --- Power-up ceremony trigger ---
         // When the player crosses the coin threshold, freeze the game
@@ -869,12 +1145,19 @@ export default function GameScreen({
         return {
           ...prevState,
           player: newPlayer,
+          platforms: newPlatforms,
           cameraX,
           cameraShake: nextShake,
           particles: updatedParticles,
           projectiles: livingProjectiles,
           collectibles: newCollectibles,
           enemies: newEnemies,
+          enemyProjectiles: livingEnemyProj,
+          checkpoints: newCheckpoints,
+          speedBoosts: newSpeedBoosts,
+          boss: newBoss,
+          combo: newCombo,
+          lastCheckpointX: newLastCheckpointX,
           progression: newProgression,
         };
       });
@@ -977,6 +1260,10 @@ export default function GameScreen({
           screenWidth={SCREEN_WIDTH}
           screenHeight={SCREEN_HEIGHT}
           levelWidth={gameState.levelWidth}
+          checkpoints={gameState.checkpoints}
+          speedBoosts={gameState.speedBoosts}
+          boss={gameState.boss}
+          enemyProjectiles={gameState.enemyProjectiles}
         />
 
         <View
@@ -1010,21 +1297,42 @@ export default function GameScreen({
         expFeedbacks={gameState.progression.expFeedback}
         cameraX={gameState.cameraX}
         renderScale={renderScale}
+        combo={gameState.combo}
       />
 
       {/* Level label + lives, top-right */}
-      <View style={styles.topRight} pointerEvents="box-none">
-        <Text style={styles.levelLabel}>{level.name.toUpperCase()}</Text>
-        <Text style={styles.livesLabel}>LIVES {lives}  SCORE {runningScore}</Text>
+      <View
+        style={[
+          styles.topRight,
+          {
+            top: Math.max(12, responsive.insets.top + 8),
+            right: Math.max(16, responsive.insets.right + 12),
+          },
+        ]}
+        pointerEvents="box-none"
+      >
+        <Text style={[styles.levelLabel, { fontSize: responsive.font(16) }]}>
+          {level.name.toUpperCase()}
+        </Text>
+        <Text style={[styles.livesLabel, { fontSize: responsive.font(12) }]}>
+          LIVES {lives}  SCORE {runningScore}
+        </Text>
         <TouchableOpacity
-          style={styles.pauseBtn}
+          style={[
+            styles.pauseBtn,
+            {
+              width: Math.round(44 * responsive.uiScale),
+              height: Math.round(44 * responsive.uiScale),
+              borderRadius: Math.round(22 * responsive.uiScale),
+            },
+          ]}
           onPress={() => {
             audio.play('menuClick');
             setIsPaused(true);
           }}
           activeOpacity={0.7}
         >
-          <Text style={styles.pauseBtnText}>II</Text>
+          <Text style={[styles.pauseBtnText, { fontSize: responsive.font(16) }]}>II</Text>
         </TouchableOpacity>
       </View>
 
@@ -1042,8 +1350,8 @@ export default function GameScreen({
       {gameState.isDying && (
         <View style={styles.deathOverlay} pointerEvents="none">
           <View style={styles.deathContent}>
-            <Text style={styles.skullText}>DOWNED</Text>
-            <Text style={styles.skullSub}>
+            <Text style={[styles.skullText, { fontSize: responsive.font(60) }]}>DOWNED</Text>
+            <Text style={[styles.skullSub, { fontSize: responsive.font(16) }]}>
               {lives - 1 > 0 ? `${lives - 1} LIVES LEFT` : 'FINAL LIFE LOST'}
             </Text>
           </View>
@@ -1072,64 +1380,82 @@ export default function GameScreen({
           Phase 'glow': frozen screen + Power Up pose + radial glow
           Phase 'modal': branded unlock modal with Flame Chalice
           ============================================================ */}
-      {powerUpPhase && (
-        <View style={styles.ceremonyOverlay}>
-          {/* Dark tinted backdrop so the frozen world recedes */}
-          <View style={styles.ceremonyBackdrop} />
+      {powerUpPhase && (() => {
+        const { shortEdge, modalWidth, font: f } = responsive;
+        const ringOuter = Math.round(shortEdge * 1.05);
+        const ringMid = Math.round(shortEdge * 0.7);
+        const ringInner = Math.round(shortEdge * 0.45);
+        const spriteH = Math.round(shortEdge * 0.56);
+        const spriteW = Math.round(spriteH * (200 / 230));
+        const chaliceW = Math.round(modalWidth * 0.6);
+        const chaliceH = Math.round(chaliceW / 1.91);
+        const cardPad = Math.round(Math.min(modalWidth * 0.08, 28));
 
-          {powerUpPhase === 'glow' && (
-            <View style={styles.ceremonyCenter}>
-              {/* Radial glow rings behind the character */}
-              <View style={[styles.glowRing, styles.glowRingOuter]} />
-              <View style={[styles.glowRing, styles.glowRingMid]} />
-              <View style={[styles.glowRing, styles.glowRingInner]} />
-              {/* Power Up sprite */}
-              <Image
-                source={require('../assets/Power Up.png')}
-                style={styles.powerUpSprite}
-                resizeMode="contain"
-              />
-              <Text style={styles.powerUpText}>POWER UP</Text>
-            </View>
-          )}
+        return (
+          <View style={styles.ceremonyOverlay}>
+            {/* Dark tinted backdrop so the frozen world recedes */}
+            <View style={styles.ceremonyBackdrop} />
 
-          {powerUpPhase === 'modal' && (
-            <View style={styles.ceremonyCenter}>
-              {/* Glow persists behind the modal */}
-              <View style={[styles.glowRing, styles.glowRingOuter, { opacity: 0.15 }]} />
-
-              <View style={styles.unlockCard}>
-                <Text style={styles.unlockEyebrow}>NEW ABILITY UNLOCKED</Text>
-
-                <View style={styles.unlockDivider} />
-
-                {/* Flame Chalice showcase */}
+            {powerUpPhase === 'glow' && (
+              <View style={styles.ceremonyCenter}>
+                {/* Radial glow rings behind the character */}
+                <View style={[styles.glowRing, styles.glowRingOuter, { width: ringOuter, height: ringOuter }]} />
+                <View style={[styles.glowRing, styles.glowRingMid, { width: ringMid, height: ringMid }]} />
+                <View style={[styles.glowRing, styles.glowRingInner, { width: ringInner, height: ringInner }]} />
+                {/* Power Up sprite */}
                 <Image
-                  source={require('../assets/FLAME CHALACE IMAGE.png')}
-                  style={styles.chaliceImage}
+                  source={require('../assets/Power Up.png')}
+                  style={[styles.powerUpSprite, { width: spriteW, height: spriteH }]}
                   resizeMode="contain"
                 />
-
-                <Text style={styles.unlockTitle}>FLAME CHALICE</Text>
-                <Text style={styles.unlockDesc}>
-                  Press F or tap FIRE to shoot{'\n'}fireballs and defeat enemies
-                </Text>
-
-                <TouchableOpacity
-                  style={styles.unlockBtn}
-                  onPress={() => {
-                    audio.play('menuClick');
-                    setPowerUpPhase(null);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.unlockBtnText}>ACCEPT</Text>
-                </TouchableOpacity>
+                <Text style={[styles.powerUpText, { fontSize: f(36) }]}>POWER UP</Text>
               </View>
-            </View>
-          )}
-        </View>
-      )}
+            )}
+
+            {powerUpPhase === 'modal' && (
+              <View style={styles.ceremonyCenter}>
+                {/* Glow persists behind the modal */}
+                <View style={[styles.glowRing, styles.glowRingOuter, { width: ringOuter, height: ringOuter, opacity: 0.15 }]} />
+
+                <View style={[styles.unlockCard, { width: modalWidth, padding: cardPad }]}>
+                  <Text style={[styles.unlockEyebrow, { fontSize: f(13) }]}>NEW ABILITY UNLOCKED</Text>
+
+                  <View style={styles.unlockDivider} />
+
+                  {/* Flame Chalice showcase */}
+                  <Image
+                    source={require('../assets/FLAME CHALACE IMAGE.png')}
+                    style={[styles.chaliceImage, { width: chaliceW, height: chaliceH }]}
+                    resizeMode="contain"
+                  />
+
+                  <Text style={[styles.unlockTitle, { fontSize: f(26) }]}>FLAME CHALICE</Text>
+                  <Text style={[styles.unlockDesc, { fontSize: f(14), lineHeight: f(22) }]}>
+                    Press F or tap FIRE to shoot{'\n'}fireballs and defeat enemies
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.unlockBtn,
+                      {
+                        paddingVertical: Math.round(12 * responsive.uiScale),
+                        paddingHorizontal: Math.round(44 * responsive.uiScale),
+                      },
+                    ]}
+                    onPress={() => {
+                      audio.play('menuClick');
+                      setPowerUpPhase(null);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.unlockBtnText, { fontSize: f(18) }]}>ACCEPT</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        );
+      })()}
     </View>
   );
 }

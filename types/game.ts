@@ -8,6 +8,68 @@ export interface Platform {
   y: number;
   width: number;
   height: number;
+  /** 'moving' platforms slide back and forth on a rail. */
+  moveType?: 'moving' | 'breakable';
+  /** World-x range for moving platforms. */
+  moveStart?: number;
+  moveEnd?: number;
+  /** Speed in px/s for moving platforms. */
+  moveSpeed?: number;
+  /** Break timer remaining (ms). Set when player first lands. */
+  breakTimer?: number;
+  /** Whether a breakable platform has fully crumbled. */
+  broken?: boolean;
+}
+
+/** Mid-level respawn flag. On death the player restarts at the last
+ *  checkpoint they touched rather than the level start. */
+export interface Checkpoint {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  activated: boolean;
+}
+
+/** Temporary speed boost pickup. */
+export interface SpeedBoost {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  collected: boolean;
+}
+
+/** Boss enemy — multi-hit, attack patterns, health bar. */
+export interface Boss {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  health: number;
+  maxHealth: number;
+  /** Current behavior phase. */
+  phase: 'idle' | 'charge' | 'vulnerable' | 'defeated';
+  /** Timer for current phase (ms remaining). */
+  phaseTimer: number;
+  /** Direction the boss is facing / charging. */
+  direction: number;
+  speed: number;
+  /** World-x patrol bounds for the boss arena. */
+  arenaLeft: number;
+  arenaRight: number;
+}
+
+/** Combo multiplier state tracked per-run. */
+export interface ComboState {
+  multiplier: number; // 1, 2, 3, 4
+  /** ms remaining before combo resets. */
+  timer: number;
+  /** Running count of actions in this streak. */
+  streak: number;
 }
 
 export interface Player {
@@ -27,6 +89,8 @@ export interface Player {
   shootCooldownMs: number;
   /** Remaining ms to hold the flamethrow pose (visual only). */
   shootAnimMs: number;
+  /** Remaining ms of speed boost. 0 = normal speed. */
+  speedBoostMs: number;
 }
 
 /**
@@ -109,6 +173,22 @@ export interface GameState {
 export type EnemyType = 'crab' | 'seagull' | 'policeman' | 'drone';
 export type EnemyBehavior = 'patrol' | 'hover' | 'chase' | 'lockon';
 
+/**
+ * Enemy-fired projectile (drone laser). Travels toward the player's
+ * last known position. Player contact = damage/death.
+ */
+export interface EnemyProjectile {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  width: number;
+  height: number;
+  life: number;
+  maxLife: number;
+}
+
 export interface Enemy {
   id: string;
   type: EnemyType;
@@ -146,6 +226,13 @@ export interface Enemy {
    */
   idleSprite?: any;
   movingSprite?: any;
+  /** Vertical patrol bounds for drones (world-y range). */
+  patrolTopY?: number;
+  patrolBottomY?: number;
+  /** Vertical direction: -1 = up, 1 = down. */
+  directionY?: number;
+  /** Remaining ms until the drone can fire again. */
+  shootCooldown?: number;
 }
 
 /**
@@ -208,4 +295,7 @@ export interface LevelData {
   enemies: Enemy[];
   hazards: Hazard[];
   goal: Goal;
+  checkpoints: Checkpoint[];
+  speedBoosts: SpeedBoost[];
+  boss?: Boss;
 }

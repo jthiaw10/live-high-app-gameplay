@@ -7,6 +7,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BRAND } from '../config/constants';
 import { LevelResult } from './GameScreen';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface LevelCompleteOverlayProps {
   levelName: string;
@@ -19,41 +20,64 @@ export default function LevelCompleteOverlay({
   result,
   onNext,
 }: LevelCompleteOverlayProps) {
+  const { modalWidth, font, uiScale } = useResponsive();
   const allCoins = result.coinsCollected === result.coinsTotal;
+  const cardPad = Math.round(22 * uiScale);
 
   return (
     <View style={styles.overlay}>
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>UPLINK COMPLETE</Text>
-        <Text style={styles.title}>{levelName.toUpperCase()}</Text>
+      <View style={[styles.card, { width: modalWidth, padding: cardPad }]}>
+        <Text style={[styles.eyebrow, { fontSize: font(12) }]}>UPLINK COMPLETE</Text>
+        <Text style={[styles.title, { fontSize: font(22) }]}>{levelName.toUpperCase()}</Text>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { marginVertical: Math.round(14 * uiScale) }]} />
 
-        <View style={styles.row}>
-          <Text style={styles.label}>Hi-Fi Collected</Text>
-          <Text style={[styles.value, allCoins && { color: BRAND.reggaeGreen }]}>
+        <View style={[styles.row, { marginBottom: Math.round(8 * uiScale) }]}>
+          <Text style={[styles.label, { fontSize: font(14) }]}>Hi-Fi Collected</Text>
+          <Text
+            style={[
+              styles.value,
+              { fontSize: font(14) },
+              allCoins && { color: BRAND.reggaeGreen },
+            ]}
+          >
             {result.coinsCollected} / {result.coinsTotal}
             {allCoins ? '  PERFECT' : ''}
           </Text>
         </View>
 
-        <View style={styles.row}>
-          <Text style={styles.label}>EXP Earned</Text>
-          <Text style={styles.value}>+{result.exp}</Text>
+        <View style={[styles.row, { marginBottom: Math.round(8 * uiScale) }]}>
+          <Text style={[styles.label, { fontSize: font(14) }]}>EXP Earned</Text>
+          <Text style={[styles.value, { fontSize: font(14) }]}>+{result.exp}</Text>
         </View>
 
-        <View style={styles.row}>
-          <Text style={styles.label}>Clear Bonus</Text>
-          <Text style={styles.value}>+{result.bonus}</Text>
+        <View style={[styles.row, { marginBottom: Math.round(8 * uiScale) }]}>
+          <Text style={[styles.label, { fontSize: font(14) }]}>Clear Bonus</Text>
+          <Text style={[styles.value, { fontSize: font(14) }]}>+{result.bonus}</Text>
         </View>
 
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>LEVEL SCORE</Text>
-          <Text style={styles.totalValue}>{result.exp + result.bonus}</Text>
+        <View
+          style={[
+            styles.totalRow,
+            {
+              marginTop: Math.round(8 * uiScale),
+              paddingTop: Math.round(10 * uiScale),
+              marginBottom: Math.round(16 * uiScale),
+            },
+          ]}
+        >
+          <Text style={[styles.totalLabel, { fontSize: font(16) }]}>LEVEL SCORE</Text>
+          <Text style={[styles.totalValue, { fontSize: font(20) }]}>
+            {result.exp + result.bonus}
+          </Text>
         </View>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={onNext} activeOpacity={0.8}>
-          <Text style={styles.primaryBtnText}>CONTINUE</Text>
+        <TouchableOpacity
+          style={[styles.primaryBtn, { paddingVertical: Math.round(12 * uiScale) }]}
+          onPress={onNext}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.primaryBtnText, { fontSize: font(16) }]}>CONTINUE</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -72,8 +96,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: {
-    width: 360,
-    padding: 28,
     borderRadius: 18,
     backgroundColor: BRAND.nightPurple,
     borderWidth: 2,
@@ -86,14 +108,12 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: BRAND.neonTeal,
-    fontSize: 12,
     letterSpacing: 5,
     fontWeight: 'bold',
     textAlign: 'center',
   },
   title: {
     color: BRAND.gold,
-    fontSize: 22,
     fontWeight: 'bold',
     letterSpacing: 2,
     textAlign: 'center',
@@ -104,54 +124,43 @@ const styles = StyleSheet.create({
     width: 80,
     backgroundColor: BRAND.sunsetOrange,
     alignSelf: 'center',
-    marginVertical: 16,
     borderRadius: 2,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
   },
   label: {
     color: BRAND.offWhite,
-    fontSize: 14,
     letterSpacing: 1,
   },
   value: {
     color: BRAND.neonTeal,
-    fontSize: 14,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 216, 77, 0.3)',
-    marginBottom: 20,
   },
   totalLabel: {
     color: BRAND.gold,
-    fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 2,
   },
   totalValue: {
     color: BRAND.gold,
-    fontSize: 20,
     fontWeight: 'bold',
   },
   primaryBtn: {
-    paddingVertical: 14,
     borderRadius: 10,
     backgroundColor: BRAND.sunsetOrange,
     alignItems: 'center',
   },
   primaryBtnText: {
     color: BRAND.nightPurple,
-    fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 3,
   },

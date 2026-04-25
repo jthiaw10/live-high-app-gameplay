@@ -6,6 +6,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { BRAND } from '../config/constants';
 import { audio } from '../lib/audio';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface CreditsScreenProps {
   onBack: () => void;
@@ -37,18 +38,29 @@ const CREDITS = [
 ];
 
 export default function CreditsScreen({ onBack }: CreditsScreenProps) {
+  const { insets, font, uiScale } = useResponsive();
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.eyebrow}>ROLL CALL</Text>
-      <Text style={styles.title}>CREDITS</Text>
-      <View style={styles.divider} />
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: Math.max(30, insets.top + 20),
+          paddingBottom: Math.max(16, insets.bottom + 12),
+          paddingHorizontal: Math.max(20, insets.left + 20, insets.right + 20),
+        },
+      ]}
+    >
+      <Text style={[styles.eyebrow, { fontSize: font(13) }]}>ROLL CALL</Text>
+      <Text style={[styles.title, { fontSize: font(40) }]}>CREDITS</Text>
+      <View style={[styles.divider, { marginVertical: Math.round(16 * uiScale) }]} />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollInner}>
         {CREDITS.map((c) => (
-          <View key={c.section} style={styles.block}>
-            <Text style={styles.blockTitle}>{c.section}</Text>
+          <View key={c.section} style={[styles.block, { marginBottom: Math.round(16 * uiScale) }]}>
+            <Text style={[styles.blockTitle, { fontSize: font(13) }]}>{c.section}</Text>
             {c.lines.map((l, i) => (
-              <Text key={i} style={styles.blockLine}>
+              <Text key={i} style={[styles.blockLine, { fontSize: font(14), lineHeight: font(22) }]}>
                 {l}
               </Text>
             ))}
@@ -57,14 +69,21 @@ export default function CreditsScreen({ onBack }: CreditsScreenProps) {
       </ScrollView>
 
       <TouchableOpacity
-        style={styles.backBtn}
+        style={[
+          styles.backBtn,
+          {
+            marginTop: Math.round(8 * uiScale),
+            paddingHorizontal: Math.round(36 * uiScale),
+            paddingVertical: Math.round(12 * uiScale),
+          },
+        ]}
         onPress={() => {
           audio.play('menuClick');
           onBack();
         }}
         activeOpacity={0.85}
       >
-        <Text style={styles.backText}>BACK</Text>
+        <Text style={[styles.backText, { fontSize: font(15) }]}>BACK</Text>
       </TouchableOpacity>
     </View>
   );
@@ -75,19 +94,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BRAND.nightPurple,
     alignItems: 'center',
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
   },
   eyebrow: {
     color: BRAND.neonTeal,
-    fontSize: 13,
     letterSpacing: 5,
     fontWeight: 'bold',
   },
   title: {
     color: BRAND.gold,
-    fontSize: 42,
     fontWeight: '900',
     letterSpacing: 4,
     marginTop: 6,
@@ -99,13 +113,12 @@ const styles = StyleSheet.create({
     height: 2,
     width: 100,
     backgroundColor: BRAND.sunsetOrange,
-    marginVertical: 22,
     borderRadius: 2,
   },
   scroll: {
     flex: 1,
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 520,
   },
   scrollInner: {
     alignItems: 'center',
@@ -113,32 +126,24 @@ const styles = StyleSheet.create({
   },
   block: {
     alignItems: 'center',
-    marginBottom: 20,
   },
   blockTitle: {
     color: BRAND.neonTeal,
-    fontSize: 13,
     letterSpacing: 4,
     fontWeight: 'bold',
     marginBottom: 6,
   },
   blockLine: {
     color: BRAND.offWhite,
-    fontSize: 14,
     letterSpacing: 1,
-    lineHeight: 22,
   },
   backBtn: {
-    marginTop: 10,
-    paddingHorizontal: 40,
-    paddingVertical: 14,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: BRAND.gold,
   },
   backText: {
     color: BRAND.gold,
-    fontSize: 15,
     fontWeight: 'bold',
     letterSpacing: 4,
   },
